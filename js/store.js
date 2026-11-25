@@ -6,7 +6,35 @@ window.DB = (function () {
   const MODE_KEY = 'furniture_db_mode';
   const DISABLE_KEY = 'furniture_supabase_disabled';
   const BACKUP_KEY = 'furniture_backup_config';
-  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'users'];
+  const CAT_KEY = 'furniture_categories';
+  const DEFAULT_CATEGORIES = ['Meja', 'Kursi', 'Lemari', 'Sofa', 'Rak', 'Tempat Tidur', 'Lainnya'];
+  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'users'];
+  const JOB_TITLES = ['Manager/Mandor/Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
+  const WAGE_POSITIONS = {
+    'Rizky Prasetyo': JOB_TITLES[0], 'Sinta Wulandari': JOB_TITLES[1], 'Agus Saliman': JOB_TITLES[2]
+  };
+  const OLD_PASSWORDS = {
+    U1: 'admin123', U2: 'gudang123', U3: 'purchasing123', U4: 'produksi123', U5: 'manager123'
+  };
+  const NEW_PASSWORDS = {
+    U1: 'Jati2026!Admin', U2: 'Jati2026!Gudang', U3: 'Jati2026!Purchasing',
+    U4: 'Jati2026!Produksi', U5: 'Jati2026!Manager'
+  };
+  // Hash SHA-256 lama/baru ("furn|" + password), dipakai saat cache berasal dari Supabase.
+  const OLD_SHA = {
+    U1: '0ba547a93cd2b092f6f191b019f5e51cb63b26e8f5be718721aa9e2031810bf0',
+    U2: '2d73a2eb3f1fe0f7db6f8e8a24a97fa29875f519fa89563817e745d84eb4b88e',
+    U3: '41c5196709e684d22aa92a6e920ea82b488f85695ca52932e09519739d5db7ae',
+    U4: '9a0c50dea694e830a480ab3735d33b50b7cb4f4842ef45341cb412ff1d0646cb',
+    U5: '8fbedfee8dc9b408e28859011d400bce096e4a6a205788770550d8258753b256'
+  };
+  const NEW_SHA = {
+    U1: 'a68dc3ac82c2d6dc15fea1ec9e3249e13c697c128021c50865641396e44a168a',
+    U2: 'c314f60e66cef245f997cd1d5fcce58ed1d4582821333b2b2ddee1d9ddb06826',
+    U3: '8ae357c073b5153b282ff5c246ae959e7b10af40f81a839e9c8260c142b43f44',
+    U4: 'd8e1dca75f1b89d79b655458324123e33b7b5c934c436a6dbe4b384c965f0ac6',
+    U5: '95dc3ac173677f5be8d84b995d5e02537fb3613c901da503bb4b4081d4c7f84a'
+  };
   let cache = null;
   let mode = localStorage.getItem(MODE_KEY) || 'local';
   let sb = null;
@@ -50,7 +78,8 @@ window.DB = (function () {
       ['ST010', 'Meja Lipat Portable', 'Meja', '120 x 60 x 75 cm', 'Barang Jadi', 10, '📦', '#fef9c3']
     ].map((p, i) => ({
       id: 'P' + String(i + 1).padStart(3, '0'), sku: p[0], name: p[1], category: p[2], size: p[3],
-      status: p[4], minStock: p[5], photo: svgPhoto(p[6], p[7]), notes: '', createdAt: t
+      status: p[4], minStock: p[5], photo: svgPhoto(p[6], p[7]), notes: '',
+      price: 0, rateAmplas: 0, ratePacking: 0, createdAt: t
     }));
 
     const artisans = [
@@ -157,36 +186,66 @@ window.DB = (function () {
     });
 
     const wages = [
-      ['Rizky Prasetyo', 150000, 25000, 1, 2, -9, 'Lembur finishing kursi'],
-      ['Sinta Wulandari', 140000, 20000, 1, 0, -9, ''],
-      ['Agus Saliman', 160000, 25000, 1, 1, -8, 'Lembur perakitan'],
-      ['Rizky Prasetyo', 150000, 25000, 1, 3, -7, 'Lembur pengiriman'],
-      ['Sinta Wulandari', 140000, 20000, 1, 1, -6, ''],
-      ['Agus Saliman', 160000, 25000, 1, 0, -5, ''],
-      ['Rizky Prasetyo', 150000, 25000, 1, 2, -3, 'Lembur finishing'],
-      ['Sinta Wulandari', 140000, 20000, 1, 0, -2, ''],
-      ['Agus Saliman', 160000, 25000, 1, 2, -1, 'Lembur packing'],
-      ['Rizky Prasetyo', 150000, 25000, 1, 1, 0, 'Masuk hari ini']
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -9, 'Lembur finishing kursi', JOB_TITLES[0]],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -9, '', JOB_TITLES[1]],
+      ['Agus Saliman', 160000, 25000, 1, 1, -8, 'Lembur perakitan', JOB_TITLES[2]],
+      ['Rizky Prasetyo', 150000, 25000, 1, 3, -7, 'Lembur pengiriman', JOB_TITLES[0]],
+      ['Sinta Wulandari', 140000, 20000, 1, 1, -6, '', JOB_TITLES[1]],
+      ['Agus Saliman', 160000, 25000, 1, 0, -5, '', JOB_TITLES[2]],
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -3, 'Lembur finishing', JOB_TITLES[0]],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -2, '', JOB_TITLES[1]],
+      ['Agus Saliman', 160000, 25000, 1, 2, -1, 'Lembur packing', JOB_TITLES[2]],
+      ['Rizky Prasetyo', 150000, 25000, 1, 1, 0, 'Masuk hari ini', JOB_TITLES[0]]
     ].map((w, i) => ({
       id: 'WG' + String(i + 1).padStart(3, '0'), date: d(w[5]), employee: w[0],
       dailyWage: w[1], overtimeRate: w[2], days: w[3], overtimeHours: w[4],
-      notes: w[6], createdAt: new Date().toISOString()
+      position: w[7], notes: w[6], createdAt: new Date().toISOString()
     }));
 
     return {
       version: 1, products, artisans, inbound, outbound, distributions, returns, qc, spk, wages,
+      borong: [],
       users: [
-        { id: 'U1', username: 'admin', password: hash('admin123'), name: 'Administrator', role: 'ADMIN', active: true },
-        { id: 'U2', username: 'gudang', password: hash('gudang123'), name: 'Budi (Gudang)', role: 'GUDANG', active: true },
-        { id: 'U3', username: 'purchasing', password: hash('purchasing123'), name: 'Sari (Purchasing)', role: 'PURCHASING', active: true },
-        { id: 'U4', username: 'produksi', password: hash('produksi123'), name: 'Rangga (Produksi)', role: 'PRODUKSI', active: true },
-        { id: 'U5', username: 'manager', password: hash('manager123'), name: 'Pak Direktur', role: 'MANAGER', active: true }
+        { id: 'U1', username: 'admin', password: hash(NEW_PASSWORDS.U1), name: 'Administrator', role: 'ADMIN', active: true },
+        { id: 'U2', username: 'gudang', password: hash(NEW_PASSWORDS.U2), name: 'Budi (Gudang)', role: 'GUDANG', active: true },
+        { id: 'U3', username: 'purchasing', password: hash(NEW_PASSWORDS.U3), name: 'Sari (Purchasing)', role: 'PURCHASING', active: true },
+        { id: 'U4', username: 'produksi', password: hash(NEW_PASSWORDS.U4), name: 'Rangga (Produksi)', role: 'PRODUKSI', active: true },
+        { id: 'U5', username: 'manager', password: hash(NEW_PASSWORDS.U5), name: 'Pak Direktur', role: 'MANAGER', active: true }
       ],
       settings: { company: 'CV Furniture Jati', seededAt: new Date().toISOString() }
     };
   }
 
   /* ---------- Penyimpanan ---------- */
+  // Naikkan password bawaan lama di data lokal yang sudah tersimpan,
+  // tanpa menghapus stok/transaksi dan tanpa menimpa password custom.
+  function migratePasswords() {
+    if (!Array.isArray(cache.users)) return;
+    let changed = false;
+    cache.users.forEach(u => {
+      const old = OLD_PASSWORDS[u.id];
+      const next = NEW_PASSWORDS[u.id];
+      if (!old || !next) return;
+      if (u.password === hash(old)) {
+        u.password = hash(next);
+        changed = true;
+      } else if (u.password === OLD_SHA[u.id]) {
+        u.password = NEW_SHA[u.id];
+        changed = true;
+      }
+    });
+    // Data lama belum punya jabatan: isi otomatis dari nama karyawan bawaan.
+    if (Array.isArray(cache.wages)) {
+      cache.wages.forEach(w => {
+        if (!w.position && WAGE_POSITIONS[w.employee]) { w.position = WAGE_POSITIONS[w.employee]; changed = true; }
+      });
+    }
+    if (changed) {
+      try { localStorage.setItem(KEY, JSON.stringify(cache)); }
+      catch (e) { console.warn('Gagal menyimpan migrasi data lokal', e); }
+    }
+  }
+
   function load() {
     if (cache) return cache;
     try {
@@ -194,6 +253,7 @@ window.DB = (function () {
       if (raw) {
         cache = JSON.parse(raw);
         TABLES.forEach(k => { if (!Array.isArray(cache[k])) cache[k] = []; });
+        migratePasswords();
         return cache;
       }
     } catch (e) { console.warn('DB load gagal, reset:', e); }
@@ -203,6 +263,41 @@ window.DB = (function () {
     try { localStorage.setItem(KEY, JSON.stringify(cache)); }
     catch (e) { U.toast('Gagal menyimpan cache lokal (penyimpanan penuh)', 'error'); }
     scheduleBackup();
+  }
+
+  /* ---------- Kategori produk ---------- */
+  // Kategori bawaan + kategori buatan user + kategori yang sudah dipakai produk.
+  function getCategories() {
+    let extra = [];
+    try { extra = JSON.parse(localStorage.getItem(CAT_KEY) || '[]') || []; } catch (e) { extra = []; }
+    const used = all('products').map(p => String(p.category || '').trim()).filter(Boolean);
+    return Array.from(new Set(DEFAULT_CATEGORIES.concat(extra, used))).sort(U.natCompare);
+  }
+  function saveCategories(list) {
+    const clean = Array.from(new Set((list || []).map(c => String(c).trim()).filter(Boolean)));
+    const extra = clean.filter(c => DEFAULT_CATEGORIES.indexOf(c) < 0);
+    localStorage.setItem(CAT_KEY, JSON.stringify(extra));
+    return getCategories();
+  }
+  function addCategory(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    if (getCategories().some(c => c.toLowerCase() === clean.toLowerCase())) return false;
+    saveCategories(getCategories().concat(clean));
+    return true;
+  }
+  function renameCategory(oldName, newName) {
+    const clean = String(newName || '').trim();
+    if (!clean || !oldName || clean === oldName) return false;
+    if (getCategories().some(c => c !== oldName && c.toLowerCase() === clean.toLowerCase())) return false;
+    all('products').forEach(p => { if (p.category === oldName) update('products', p.id, { category: clean }); });
+    saveCategories(getCategories().filter(c => c !== oldName).concat(clean));
+    return true;
+  }
+  function deleteCategory(name) {
+    if (all('products').some(p => p.category === name)) return false;
+    saveCategories(getCategories().filter(c => c !== name));
+    return true;
   }
 
   /* ---------- Backup ke Google Sheet / Gmail via Apps Script ---------- */
@@ -355,10 +450,11 @@ window.DB = (function () {
     for (const name of TABLES) {
       const { data, error } = await sb.from(name).select('*');
       if (error) throw new Error('Gagal memuat ' + name + ': ' + error.message +
-        (name === 'wages' ? '. Jalankan supabase/add-wages.sql di SQL Editor untuk membuat tabel gaji.' : ''));
+        (name === 'wages' ? '. Jalankan supabase/add-wages.sql di SQL Editor untuk membuat tabel gaji.' :
+         name === 'borong' ? '. Jalankan supabase/add-borong.sql di SQL Editor untuk membuat tabel gaji borong.' : ''));
       out[name] = data || [];
     }
-    cache = out; save(); return cache;
+    cache = out; migratePasswords(); save(); return cache;
   }
 
   async function syncNow() {
@@ -391,9 +487,9 @@ window.DB = (function () {
         const { error } = await sb.from(name).insert(cache[name]);
         if (error) throw new Error('Gagal mengisi ' + name + ': ' + error.message);
       }
-      save(); return cache;
+      migratePasswords(); save(); return cache;
     }
-    cache = fresh; save(); return cache;
+    cache = fresh; migratePasswords(); save(); return cache;
   }
 
   async function replace(obj) {
@@ -412,7 +508,7 @@ window.DB = (function () {
         if (error) throw new Error('Gagal memulihkan ' + name + ': ' + error.message);
       }
     }
-    cache = obj; save(); return true;
+    cache = obj; migratePasswords(); save(); return true;
   }
 
   /* ---------- CRUD (sinkron untuk UI, async ke Supabase) ---------- */
@@ -444,21 +540,28 @@ window.DB = (function () {
   function qtyIn(pid) { return sumWhere(all('inbound'), x => x.productId === pid, 'qty'); }
   function qtyOut(pid, type) { return sumWhere(all('outbound'), x => x.productId === pid && (!type || x.type === type), 'qty'); }
   function qtyDist(pid, aid) { return sumWhere(all('distributions'), x => x.productId === pid && (!aid || x.artisanId === aid), 'qty'); }
-  function qtyReturn(pid, aid) { return sumWhere(all('returns'), x => x.productId === pid && (!aid || x.artisanId === aid), 'qty'); }
+  const isArtisanReturn = r => !r.source || r.source === 'Pengrajin' || !!r.distributionId;
+  function qtyReturn(pid, aid) { return sumWhere(all('returns'), x => x.productId === pid && isArtisanReturn(x) && (!aid || x.artisanId === aid), 'qty'); }
+  function qtyReturnSource(pid, source) { return sumWhere(all('returns'), x => x.productId === pid && x.source === source, 'qty'); }
+  function qtyOutNet(pid, type) { return qtyOut(pid, type) - qtyReturnSource(pid, type); }
   function qtyAfkirArtisan(pid, aid) { return sumWhere(all('returns'), x => x.productId === pid && (!aid || x.artisanId === aid), 'afkirQty'); }
   function qtyQc(pid) { return sumWhere(all('qc'), x => x.productId === pid, 'qty'); }
-  function qtyQcPassed(pid) { return sumWhere(all('qc'), x => x.productId === pid, 'passedQty'); }
+  function qtyQcPassed(pid) { return sumWhere(all('qc'), x => x.productId === pid && !x.inboundId, 'passedQty'); }
+  function qtyQcPassedAll(pid) { return sumWhere(all('qc'), x => x.productId === pid, 'passedQty'); }
   function qtyQcRejected(pid) { return sumWhere(all('qc'), x => x.productId === pid, 'rejectedQty'); }
 
   function stock(pid) {
+    const borrowed = ['Borong Obat', 'Servis', 'Pinjaman Sampel'];
+    const borrowedOut = U.sum(borrowed, t => qtyOut(pid, t));
+    // Barang pinjaman baru kembali ke gudang setelah QC lulus dibuatkan barang masuk.
     const warehouse = qtyIn(pid) - qtyDist(pid) - qtyOut(pid) + qtyQcPassed(pid);
     const process = qtyDist(pid) - qtyReturn(pid);
     const qcPending = sumWhere(all('returns'), x => x.productId === pid, 'goodQty') - qtyQc(pid);
     const damaged = qtyOut(pid, 'Rusak/Afkir') + qtyAfkirArtisan(pid) + qtyQcRejected(pid);
-    const ready = Math.max(0, qtyQcPassed(pid) - qtyOut(pid, 'Customer') - qtyOut(pid, 'Borong Obat'));
+    const ready = Math.max(0, qtyQcPassedAll(pid) - qtyOut(pid, 'Customer') - borrowedOut);
     return {
       warehouse: warehouse, process: process, qc: qcPending, damaged: damaged,
-      ready: ready, borong: qtyOut(pid, 'Borong Obat'), total: warehouse + process + qcPending
+      ready: ready, borong: qtyOutNet(pid, 'Borong Obat'), total: warehouse + process + qcPending
     };
   }
 
@@ -488,7 +591,123 @@ window.DB = (function () {
       .sort((a, b) => a.date.localeCompare(b.date));
     const basic = U.sum(rows, w => U.num(w.days) * U.num(w.dailyWage));
     const overtime = U.sum(rows, w => U.num(w.overtimeHours) * U.num(w.overtimeRate));
-    return { employee, start, end, rows, basic, overtime, subtotal: basic + overtime };
+    return {
+      employee, start, end, rows, basic, overtime, subtotal: basic + overtime,
+      position: (rows[0] || {}).position || ''
+    };
+  }
+
+  /* ---------- Gaji borong amplas & packing ---------- */
+  const borongItemTotal = it => U.num(it.qty) * U.num(it.rate) + U.num(it.overtime);
+  const borongItemTarget = it => U.num(it.targetQty || it.qty);
+  const borongDone = b => U.sum(b.items || [], it => U.num(it.qty));
+  const borongTarget = b => U.sum(b.items || [], borongItemTarget);
+  function borongTotal(b) {
+    return U.sum(b.items || [], borongItemTotal) + U.num(b.overtimeExtra);
+  }
+  function borongSummary(date) {
+    const rows = all('borong').filter(b => !date || b.date === date);
+    const byType = t => U.sum(rows.filter(b => b.type === t), borongTotal);
+    return {
+      rows,
+      people: U.unique(rows.map(b => b.employee)).length,
+      amplas: byType('Amplas'),
+      packing: byType('Packing'),
+      overtime: U.sum(rows, b => U.sum(b.items || [], it => U.num(it.overtime)) + U.num(b.overtimeExtra)),
+      done: U.sum(rows, borongDone),
+      target: U.sum(rows, borongTarget),
+      items: U.sum(rows, b => (b.items || []).length),
+      total: U.sum(rows, borongTotal)
+    };
+  }
+  function borongWeek(employee, start) {
+    const end = U.shiftDays(6, start);
+    const rows = all('borong').filter(b => (!employee || b.employee === employee) && b.date >= start && b.date <= end)
+      .sort((a, b) => a.date.localeCompare(b.date) || String(a.type).localeCompare(b.type));
+    const items = [];
+    rows.forEach(b => (b.items || []).forEach(it => items.push(Object.assign({
+      date: b.date, employee: b.employee, type: b.type, borongId: b.id,
+      handledById: b.handledById, handledByName: b.handledByName, workerName: b.workerName
+    }, it))));
+    const basic = U.sum(items, it => U.num(it.qty) * U.num(it.rate));
+    const overtime = U.sum(items, it => U.num(it.overtime)) + U.sum(rows, b => U.num(b.overtimeExtra));
+    return { employee, start, end, rows, items, basic, overtime, subtotal: basic + overtime,
+      done: U.sum(rows, borongDone), target: U.sum(rows, borongTarget), total: U.sum(rows, borongTotal) };
+  }
+
+  /* ---------- Informasi operasional produksi & gudang (dashboard) ---------- */
+  function opsSummary(date) {
+    const day = date || U.today();
+    const bucket = () => ({ qty: 0, items: [] });
+    const add = (b, label, qty, href) => {
+      const n = U.num(qty);
+      if (n <= 0) return;
+      b.qty += n;
+      const found = b.items.find(x => x.label === label);
+      if (found) found.qty += n; else b.items.push({ label, qty: n, href: href || '' });
+    };
+    const production = bucket(), qcPending = bucket(), sample = bucket(), borongObat = bucket(), servis = bucket(), warehouse = bucket();
+    all('products').forEach(p => {
+      const s = stock(p.id), sku = p.sku + ' — ' + p.name;
+      add(production, sku, s.process, '#/distributions');
+      add(qcPending, sku, s.qc, '#/returns');
+      add(warehouse, sku, s.warehouse, '#/products');
+      add(sample, sku, qtyOutNet(p.id, 'Pinjaman Sampel'), '#/outbound');
+      add(borongObat, sku, qtyOutNet(p.id, 'Borong Obat'), '#/outbound');
+      add(servis, sku, qtyOutNet(p.id, 'Servis'), '#/outbound');
+    });
+    const returned = bucket();
+    all('returns').filter(r => !date || r.date === day).forEach(r => {
+      add(returned, (r.source || 'Pengrajin') + ' — ' + (r.productName || r.sku || '-'), r.goodQty || r.qty, '#/returns');
+    });
+    const qcDone = bucket();
+    all('qc').filter(q => !date || q.date === day).forEach(q => {
+      add(qcDone, q.productName || q.sku || '-', q.passedQty, '#/returns');
+    });
+    const sortItems = b => { b.items.sort((a, z) => z.qty - a.qty); return b; };
+    return {
+      date: day,
+      production: sortItems(production), qcPending: sortItems(qcPending), sample: sortItems(sample),
+      borongObat: sortItems(borongObat), servis: sortItems(servis), returned: sortItems(returned), qcDone: sortItems(qcDone),
+      warehouse: sortItems(warehouse),
+      outside: production.qty + qcPending.qty + sample.qty + borongObat.qty + servis.qty
+    };
+  }
+
+  /* Ringkasan kerja harian untuk pengawas (owner/manager) */
+  function dailyWorkSummary(date) {
+    const day = date || U.today();
+    const dists = all('distributions').filter(d => d.date === day);
+    const rets = all('returns').filter(r => r.date === day && isArtisanReturn(r));
+    const prodMap = {};
+    dists.forEach(d => {
+      const name = (get('artisans', d.artisanId) || {}).name || d.artisanName || '-';
+      prodMap[name] = prodMap[name] || { name, given: 0, finished: 0 };
+      prodMap[name].given += U.num(d.qty);
+    });
+    rets.forEach(r => {
+      const name = r.artisanName || (get('artisans', r.artisanId) || {}).name || '-';
+      prodMap[name] = prodMap[name] || { name, given: 0, finished: 0 };
+      prodMap[name].finished += U.num(r.goodQty);
+    });
+    const borongRows = all('borong').filter(b => b.date === day);
+    const bMap = {};
+    borongRows.forEach(b => {
+      const admin = b.handledByName || (get('users', b.handledById) || {}).name || (get('users', b.handledById) || {}).username || '-';
+      const key = admin + '|' + b.employee + '|' + b.type;
+      bMap[key] = bMap[key] || { admin, worker: b.workerName || '', employee: b.employee, type: b.type, target: 0, done: 0, wage: 0 };
+      bMap[key].target += borongTarget(b);
+      bMap[key].done += borongDone(b);
+      bMap[key].wage += borongTotal(b);
+    });
+    const production = Object.values(prodMap).sort((a, b) => U.natCompare(a.name, b.name));
+    const borong = Object.values(bMap).sort((a, b) => U.natCompare(a.employee, b.employee) || a.type.localeCompare(b.type));
+    return {
+      date: day, production, borong,
+      given: U.sum(production, r => r.given), finished: U.sum(production, r => r.finished),
+      target: U.sum(borong, r => r.target), done: U.sum(borong, r => r.done),
+      wage: U.sum(borong, r => r.wage)
+    };
   }
 
   function artisanStats(aid) {
@@ -553,10 +772,10 @@ window.DB = (function () {
 
   const PERMS = {
     ADMIN: ['*'],
-    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.view', 'qc.*', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
+    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.*', 'qc.*', 'spk.view', 'borong.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
     PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
-    PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.*', 'qc.view', 'spk.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
-    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
+    PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.view', 'qc.view', 'spk.*', 'borong.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
+    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'borong.view', 'borong.assign', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
   };
   function can(perm) {
     const u = currentUser();
@@ -569,10 +788,13 @@ window.DB = (function () {
   }
 
   return {
-    KEY, TABLES, load, save, reset, replace, all, get, insert, update, remove,
+    KEY, TABLES, DEFAULT_CATEGORIES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove,
+    getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
-    qtyIn, qtyOut, qtyDist, qtyReturn, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcRejected,
-    stock, totals, payrollSummary, payrollWeek, wageTotal, artisanStats, distRemaining, validate,
+    qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
+    stock, totals, opsSummary, dailyWorkSummary, payrollSummary, payrollWeek, wageTotal,
+    borongItemTotal, borongItemTarget, borongDone, borongTarget, borongTotal, borongSummary, borongWeek,
+    artisanStats, distRemaining, validate,
     authenticate, currentUser, login, logout, can, hash, hashAsync, svgPhoto
   };
 })();

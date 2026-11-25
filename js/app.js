@@ -13,12 +13,13 @@ window.App = (function () {
     ]},
     { group: 'Produksi', items: [
       { key: 'artisans', label: 'Pengrajin', icon: '👷', perm: 'artisans.view' },
-      { key: 'distributions', label: 'Distribusi Barang', icon: '🔨', perm: 'distributions.view' },
+      { key: 'distributions', label: 'Distribusi & Tugas Borong', icon: '🔨', perm: 'distributions.view' },
       { key: 'returns', label: 'Barang Kembali & QC', icon: '↩️', perm: 'returns.view' },
       { key: 'spk', label: 'SPK', icon: '📝', perm: 'spk.view' }
     ]},
     { group: 'Keuangan', items: [
-      { key: 'payroll', label: 'Gaji Karyawan', icon: '💰', perm: 'payroll.view' }
+      { key: 'payroll', label: 'Gaji Karyawan', icon: '💰', perm: 'payroll.view' },
+      { key: 'borong', label: 'Tugas & Gaji Borong', icon: '🧹', perm: 'borong.view' }
     ]},
     { group: 'Laporan & Sistem', items: [
       { key: 'import', label: 'Import Excel', icon: '⬆️', perm: 'import.view' },

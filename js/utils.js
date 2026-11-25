@@ -118,5 +118,29 @@ window.U = (function () {
   }
   function unique(arr) { return Array.from(new Set(arr)); }
 
-  return { $, $$, esc, num, fmt, rp, today, shiftDays, dateID, dateTime, uid, download, toCSV, exportExcel, exportPDF, badge, sum, group, unique };
+  // Urut alami (natural sort): angka dibandingkan sebagai angka, bukan teks.
+  // Contoh: ST-2 < ST-10, Kursi 2 < Kursi 11.
+  function natCompare(a, b) {
+    const sa = String(a === null || a === undefined ? '' : a);
+    const sb = String(b === null || b === undefined ? '' : b);
+    const pa = sa.split(/(\d+)/), pb = sb.split(/(\d+)/);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i], y = pb[i];
+      if (x === undefined) return -1;
+      if (y === undefined) return 1;
+      const xNum = /^\d+$/.test(x), yNum = /^\d+$/.test(y);
+      if (xNum && yNum) {
+        const diff = parseInt(x, 10) - parseInt(y, 10);
+        if (diff) return diff;
+        if (x.length !== y.length) return x.length - y.length;
+      } else if (x !== y) {
+        return x.localeCompare(y, 'id', { sensitivity: 'base' });
+      }
+    }
+    return 0;
+  }
+  const sortBySKU = arr => (arr || []).slice().sort((a, b) => natCompare(a.sku, b.sku) || natCompare(a.name, b.name));
+  const sortByName = arr => (arr || []).slice().sort((a, b) => natCompare(a.name, b.name) || natCompare(a.id, b.id));
+
+  return { $, $$, esc, num, fmt, rp, today, shiftDays, dateID, dateTime, uid, download, toCSV, exportExcel, exportPDF, badge, sum, group, unique, natCompare, sortBySKU, sortByName };
 })();

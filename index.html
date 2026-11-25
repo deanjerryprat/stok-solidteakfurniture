@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stok Furniture — Masuk</title>
+  <title>STOCK SOLID TEAK FURNITURE — Masuk</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.min.js" defer></script>
 </head>
@@ -11,8 +11,10 @@
   <!-- ============ HALAMAN LOGIN (terpisah dari aplikasi) ============ -->
   <div id="loginScreen" class="login-screen">
     <div class="login-card">
-      <div class="login-logo">🪑</div>
-      <h1>Stok Furniture</h1>
+      <div class="login-logo" aria-label="Logo Solid Teak">
+        <img src="assets/solid-teak-logo.png" alt="Solid Teak Furniture">
+      </div>
+      <h1>STOCK SOLID TEAK FURNITURE</h1>
       <p class="login-sub">Sistem monitoring gudang, produksi & pengrajin</p>
       <form id="loginForm" autocomplete="off">
         <label>Username</label>
@@ -21,11 +23,6 @@
         <input type="password" id="loginPassword" placeholder="••••••••" required>
         <button type="submit" class="btn btn-primary btn-block">Masuk</button>
       </form>
-      <div class="login-hint">
-        <strong>Akun demo:</strong><br>
-        admin / admin123 · gudang / gudang123 · purchasing / purchasing123<br>
-        produksi / produksi123 · manager / manager123
-      </div>
     </div>
   </div>
 
@@ -33,8 +30,8 @@
 
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
-  <script src="js/store.js"></script>
+  <script src="js/store.js?v=25"></script>
   <script src="js/ui.js"></script>
-  <script src="js/login.js"></script>
+  <script src="js/login.js?v=25"></script>
 </body>
 </html>

@@ -29,4 +29,4 @@ notify pgrst, 'reload schema';
 
 -- Uji: harus mengembalikan 1 baris ADMIN (tanpa error digest)
 select id, username, role, active
-from public.authenticate('admin', 'admin123');
+from public.authenticate('admin', 'Jati2026!Admin');

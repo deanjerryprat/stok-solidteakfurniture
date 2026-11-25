@@ -14,6 +14,9 @@ create table if not exists public.products (
   size text,
   status text,
   "minStock" integer default 0,
+  "price" numeric default 0,
+  "rateAmplas" numeric default 0,
+  "ratePacking" numeric default 0,
   photo text,
   notes text,
   "createdAt" text
@@ -66,6 +69,8 @@ create table if not exists public.distributions (
   date text,
   "artisanId" text,
   "artisanName" text,
+  "handledById" text,
+  "handledByName" text,
   "productId" text,
   sku text,
   "productName" text,
@@ -83,6 +88,8 @@ create table if not exists public.returns (
   "distributionId" text,
   "artisanId" text,
   "artisanName" text,
+  "source" text,
+  "partyName" text,
   "productId" text,
   sku text,
   "productName" text,
@@ -102,6 +109,7 @@ create table if not exists public.qc (
   qty integer default 0,
   "passedQty" integer default 0,
   "rejectedQty" integer default 0,
+  "inboundId" text,
   status text,
   notes text,
   "createdAt" text
@@ -124,10 +132,25 @@ create table if not exists public.wages (
   id text primary key,
   date text,
   employee text,
+  "position" text,
   "dailyWage" numeric default 0,
   "overtimeRate" numeric default 0,
   days numeric default 1,
   "overtimeHours" numeric default 0,
+  notes text,
+  "createdAt" text
+);
+
+create table if not exists public.borong (
+  id text primary key,
+  date text,
+  employee text,
+  "handledById" text,
+  "handledByName" text,
+  "workerName" text,
+  type text,
+  items jsonb default '[]'::jsonb,
+  "overtimeExtra" numeric default 0,
   notes text,
   "createdAt" text
 );
@@ -164,6 +187,7 @@ alter table public.returns       enable row level security;
 alter table public.qc            enable row level security;
 alter table public.spk           enable row level security;
 alter table public.wages         enable row level security;
+alter table public.borong        enable row level security;
 alter table public.users         enable row level security;
 
 drop policy if exists app_all on public.products;
@@ -175,6 +199,7 @@ drop policy if exists app_all on public.returns;
 drop policy if exists app_all on public.qc;
 drop policy if exists app_all on public.spk;
 drop policy if exists app_all on public.wages;
+drop policy if exists app_all on public.borong;
 drop policy if exists app_all on public.users;
 
 create policy app_all on public.products      for all to anon, authenticated using (true) with check (true);
@@ -186,6 +211,7 @@ create policy app_all on public.returns       for all to anon, authenticated usi
 create policy app_all on public.qc            for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.spk           for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.wages         for all to anon, authenticated using (true) with check (true);
+create policy app_all on public.borong        for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.users         for all to anon, authenticated using (true) with check (true);
 
 -- ---------- FUNGSI LOGIN ----------
@@ -210,13 +236,13 @@ $$;
 
 grant execute on function public.authenticate(text, text) to anon, authenticated;
 
--- ---------- AKUN DEMO ----------
+-- ---------- AKUN BAWAAN ----------
 insert into public.users (id, username, password, name, role, active) values
-  ('U1', 'admin',      encode(digest('furn|admin123', 'sha256'), 'hex'), 'Administrator',      'ADMIN',      true),
-  ('U2', 'gudang',     encode(digest('furn|gudang123', 'sha256'), 'hex'), 'Budi (Gudang)',      'GUDANG',     true),
-  ('U3', 'purchasing', encode(digest('furn|purchasing123', 'sha256'), 'hex'), 'Sari (Purchasing)', 'PURCHASING', true),
-  ('U4', 'produksi',   encode(digest('furn|produksi123', 'sha256'), 'hex'), 'Rangga (Produksi)',  'PRODUKSI',   true),
-  ('U5', 'manager',    encode(digest('furn|manager123', 'sha256'), 'hex'), 'Pak Direktur',       'MANAGER',    true)
+  ('U1', 'admin',      encode(extensions.digest('furn|Jati2026!Admin', 'sha256'), 'hex'), 'Administrator',      'ADMIN',      true),
+  ('U2', 'gudang',     encode(extensions.digest('furn|Jati2026!Gudang', 'sha256'), 'hex'), 'Budi (Gudang)',      'GUDANG',     true),
+  ('U3', 'purchasing', encode(extensions.digest('furn|Jati2026!Purchasing', 'sha256'), 'hex'), 'Sari (Purchasing)', 'PURCHASING', true),
+  ('U4', 'produksi',   encode(extensions.digest('furn|Jati2026!Produksi', 'sha256'), 'hex'), 'Rangga (Produksi)',  'PRODUKSI',   true),
+  ('U5', 'manager',    encode(extensions.digest('furn|Jati2026!Manager', 'sha256'), 'hex'), 'Pak Direktur',       'MANAGER',    true)
 on conflict (id) do nothing;
 
 -- Selesai. Kembali ke aplikasi → menu Pengaturan → masukkan Project URL dan publishable/anon key → Aktifkan Supabase.

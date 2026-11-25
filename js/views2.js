@@ -1,9 +1,12 @@
 /* views2.js — Distribusi, Barang Kembali/QC, SPK, Laporan, Pencarian, Notifikasi, User */
 Object.assign(window.Views, (function () {
-  const pOpts = () => DB.all('products').map(p => ({ value: p.id, label: p.sku + ' — ' + p.name }));
-  const aOpts = () => DB.all('artisans').map(a => ({ value: a.id, label: a.name }));
+  const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' — ' + p.name }));
+  const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pOf = id => DB.get('products', id) || {};
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
+  const adminOpts = () => DB.all('users').filter(u => u.active).map(u => ({ value: u.id, label: (u.name || u.username) + ' — ' + u.role }))
+    .sort((a, b) => U.natCompare(a.label, b.label));
+  const adminName = id => { const u = DB.get('users', id) || {}; return u.name || u.username || '-'; };
   const can = p => DB.can(p);
   const t = () => U.today();
   function filterRows(rows, q, fields) {
@@ -12,11 +15,28 @@ Object.assign(window.Views, (function () {
     return rows.filter(r => fields.some(f => String(r[f] || '').toLowerCase().includes(s)));
   }
 
+  // Cetak dokumen (SPK / slip gaji) lewat tab baru; fallback iframe bila popup diblokir.
+  function printDocument(html, message) {
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); return; }
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    frame.srcdoc = html;
+    frame.onload = () => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) {}
+      setTimeout(() => frame.remove(), 1500);
+    };
+    document.body.appendChild(frame);
+    UI.toast(message || 'Dokumen disiapkan untuk dicetak', 'success');
+  }
+
   const state = {
-    distSearch: '', distArtisan: '', distStatus: '', returnsTab: 'kembali', spkSearch: '',
+    distSearch: '', distArtisan: '', distAdmin: '', distStatus: '', returnsTab: 'kembali', spkSearch: '',
     reportTab: 'masuk', from: U.shiftDays(-30), to: U.today(), reportProduct: '', reportCategory: '', reportArtisan: '', reportStatus: '',
-    payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '',
-    slipEmployee: '', slipWeek: '', slipBonus: 0, slipDebt: 0, slipLate: 0
+    payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '', payrollPosition: '',
+    slipEmployee: '', slipWeek: '', slipBonus: 0, slipDebt: 0, slipLate: 0,
+    borongQ: '', borongFrom: U.shiftDays(-30), borongTo: U.today(), borongEmployee: '', borongAdmin: '', borongType: '', monitorDate: U.today(),
+    slipBorongEmployee: '', slipBorongWeek: '', slipBorongExtra: 0
   };
 
   /* ================= DISTRIBUSI ================= */
@@ -24,15 +44,16 @@ Object.assign(window.Views, (function () {
     const dists = DB.all('distributions');
     const spkOpts = DB.all('spk').map(s => ({ value: s.id, label: s.no + ' — ' + pOf(s.productId).name + ' (' + s.qty + ')' }));
     const values = existing || {
-      date: t(), artisanId: artisanId || '', productId: '', qty: '',
+      date: t(), handledById: (DB.currentUser() || {}).id || '', artisanId: artisanId || '', productId: '', qty: '',
       targetDate: U.shiftDays(7), spkId: spkId || '', proof: '', notes: ''
     };
     UI.formModal({
       title: existing ? 'Edit Distribusi' : 'Distribusikan Barang ke Pengrajin', wide: true, values,
-      notice: 'Stok gudang akan berkurang otomatis dan stok "dalam proses pengrajin" bertambah.',
+      notice: 'Pilih Admin yang Menangani (mis. admin gudang yang memegang karyawan), lalu pengrajin penerima. Stok gudang berkurang otomatis dan stok "dalam proses" bertambah.',
       fields: [
         { key: 'date', label: 'Tanggal Distribusi', type: 'date', required: true },
-        { key: 'artisanId', label: 'Nama Pengrajin', type: 'select', options: aOpts(), required: true, placeholder: '-- Pilih pengrajin --' },
+        { key: 'handledById', label: 'Admin yang Menangani', type: 'select', options: adminOpts(), required: true, placeholder: '-- Pilih admin --' },
+        { key: 'artisanId', label: 'Karyawan / Pengrajin Penerima', type: 'select', options: aOpts(), required: true, placeholder: '-- Pilih pengrajin --' },
         { key: 'productId', label: 'Produk yang Dikerjakan', type: 'select', options: pOpts(), required: true, placeholder: '-- Pilih produk --' },
         { key: 'qty', label: 'Jumlah Diberikan (pcs)', type: 'number', min: 1, required: true },
         { key: 'targetDate', label: 'Target Penyelesaian', type: 'date', required: true },
@@ -56,7 +77,8 @@ Object.assign(window.Views, (function () {
         if (U.num(data.qty) <= 0) { UI.toast('Jumlah harus > 0', 'error'); return; }
         if (U.num(data.qty) > available) { UI.toast('Stok gudang tidak cukup. Tersedia: ' + U.fmt(available), 'error'); return; }
         const row = Object.assign({}, data, {
-          qty: U.num(data.qty), sku: p.sku, productName: p.name, artisanName: a.name
+          qty: U.num(data.qty), sku: p.sku, productName: p.name, artisanName: a.name,
+          handledByName: adminName(data.handledById)
         });
         if (existing) DB.update('distributions', existing.id, row); else DB.insert('distributions', row);
         if (data.spkId) DB.update('spk', data.spkId, { status: 'Proses' });
@@ -69,20 +91,24 @@ Object.assign(window.Views, (function () {
   const distributions = {
     render() {
       let rows = DB.all('distributions');
-      rows = filterRows(rows, state.distSearch, ['sku', 'productName', 'artisanName', 'proof', 'date']);
+      rows = filterRows(rows, state.distSearch, ['sku', 'productName', 'artisanName', 'handledByName', 'proof', 'date']);
       if (state.distArtisan) rows = rows.filter(d => d.artisanId === state.distArtisan);
+      if (state.distAdmin) rows = rows.filter(d => d.handledById === state.distAdmin);
       if (state.distStatus === 'proses') rows = rows.filter(d => DB.distRemaining(d.id) > 0);
       if (state.distStatus === 'selesai') rows = rows.filter(d => DB.distRemaining(d.id) <= 0);
       if (state.distStatus === 'terlambat') rows = rows.filter(d => d.targetDate < t() && DB.distRemaining(d.id) > 0);
       rows.sort((a, b) => b.date.localeCompare(a.date));
-      return UI.pageHead('Distribusi Barang ke Pengrajin', 'Pembagian pekerjaan; stok gudang otomatis berkurang',
-        (can('distributions.create') ? '<button class="btn btn-primary" data-act="add">+ Distribusi Barang</button>' : '')) +
-        '<div class="toolbar"><input id="dSearch" placeholder="Cari produk / pengrajin..." value="' + U.esc(state.distSearch) + '">' +
+      return UI.pageHead('Distribusi & Tugas Borong', 'Pembagian pekerjaan pengrajin dan pemborong; stok gudang otomatis berkurang',
+        (can('distributions.create') ? '<button class="btn btn-primary" data-act="add">+ Distribusi Barang</button>' : '') +
+        (can('borong.assign') || can('borong.create') ? '<button class="btn" data-act="assignBorong">🧹 Tugas Borong Harian</button>' : '')) +
+        '<div class="toolbar"><input id="dSearch" placeholder="Cari produk / admin / pengrajin..." value="' + U.esc(state.distSearch) + '">' +
+        '<select id="dAdmin"><option value="">Semua admin</option>' + adminOpts().map(a => '<option value="' + a.value + '"' + (state.distAdmin === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') + '</select>' +
         '<select id="dArtisan"><option value="">Semua pengrajin</option>' + aOpts().map(a => '<option value="' + a.value + '"' + (state.distArtisan === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') + '</select>' +
         '<select id="dStatus"><option value="">Semua status</option>' + [['proses', 'Proses'], ['selesai', 'Selesai'], ['terlambat', 'Terlambat']].map(x => '<option value="' + x[0] + '"' + (state.distStatus === x[0] ? ' selected' : '') + '>' + x[1] + '</option>').join('') + '</select></div>' +
         '<div class="card"><div class="card-body">' + UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Admin yang Menangani', render: r => U.esc(r.handledByName || adminName(r.handledById)) },
             { label: 'Pengrajin', render: r => '<a href="#/artisans/' + r.artisanId + '">' + U.esc(r.artisanName) + '</a>' },
             { label: 'Produk', render: r => U.esc(r.productName) + '<br><small>' + U.esc(r.sku) + '</small>' },
             { label: 'Diberikan', align: 'right', render: r => U.fmt(r.qty) },
@@ -102,11 +128,13 @@ Object.assign(window.Views, (function () {
     },
     bind(root) {
       U.$('#dSearch', root).addEventListener('input', e => { state.distSearch = e.target.value; App.refresh(); U.$('#dSearch').focus(); });
+      U.$('#dAdmin', root).addEventListener('change', e => { state.distAdmin = e.target.value; App.refresh(); });
       U.$('#dArtisan', root).addEventListener('change', e => { state.distArtisan = e.target.value; App.refresh(); });
       U.$('#dStatus', root).addEventListener('change', e => { state.distStatus = e.target.value; App.refresh(); });
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const x = DB.get('distributions', b.dataset.id);
         if (b.dataset.act === 'add') window.openDistributionForm();
+        if (b.dataset.act === 'assignBorong') borongForm(null, 'assign');
         if (!x) return;
         if (b.dataset.act === 'return') window.openReturnForm(null, x.artisanId, x.id);
         if (b.dataset.act === 'edit') window.openDistributionForm(x);
@@ -183,19 +211,59 @@ Object.assign(window.Views, (function () {
           qty: U.num(data.qty), passedQty: U.num(data.passedQty), rejectedQty: U.num(data.rejectedQty),
           status: 'Lulus', sku: p.sku, productName: p.name
         });
+        if (existing && existing.inboundId) {
+          DB.update('inbound', existing.inboundId, { qty: row.passedQty, sku: row.sku, productName: row.productName });
+        }
         if (existing) DB.update('qc', existing.id, row); else DB.insert('qc', row);
-        UI.toast('QC selesai. ' + U.fmt(row.passedQty) + ' pcs menjadi barang jadi di gudang', 'success');
+        UI.toast('QC selesai. ' + U.fmt(row.passedQty) + ' pcs menjadi barang jadi; buat barang masuk di tab QC.', 'success');
         close(); App.refresh();
       }
     });
   }
+
+  const OTHER_SOURCES = ['Borong Obat', 'Servis', 'Pinjaman Sampel'];
+  window.openOtherReturnForm = function (source, existing, outboundRow) {
+    const p = outboundRow ? pOf(outboundRow.productId) : {};
+    UI.formModal({
+      title: existing ? 'Edit Barang Kembali' : 'Terima Barang Kembali ke Gudang', wide: true,
+      values: existing || {
+        date: t(), source: OTHER_SOURCES.includes(source) ? source : OTHER_SOURCES[0],
+        productId: p.id || '', qty: outboundRow ? outboundRow.qty : '',
+        partyName: outboundRow ? (outboundRow.artisanReceiver || outboundRow.destination || '') : '', notes: ''
+      },
+      notice: 'Barang kembali akan menunggu QC tim gudang. Setelah QC lolos, dibuatkan barang masuk.',
+      fields: [
+        { key: 'date', label: 'Tanggal Kembali', type: 'date', required: true },
+        { key: 'source', label: 'Dari', type: 'select', options: OTHER_SOURCES, required: true },
+        { key: 'productId', label: 'Produk', type: 'select', options: pOpts(), required: true, full: true },
+        { key: 'qty', label: 'Jumlah Kembali (pcs)', type: 'number', min: 1, required: true },
+        { key: 'partyName', label: 'Nama Pengrajin / Pemborong', placeholder: 'mis. Pak Radiman' },
+        { key: 'notes', label: 'Catatan', type: 'textarea', full: true }
+      ],
+      onSubmit(d, close) {
+        const prod = pOf(d.productId);
+        if (!prod.id) { UI.toast('Produk belum dipilih', 'error'); return; }
+        const max = DB.qtyOut(prod.id, d.source) - DB.qtyReturnSource(prod.id, d.source) + (existing && existing.source === d.source ? U.num(existing.qty) : 0);
+        if (U.num(d.qty) <= 0 || U.num(d.qty) > max) {
+          UI.toast('Jumlah tidak boleh melebihi barang masih di ' + d.source + ' (' + U.fmt(Math.max(0, max)) + ')', 'error'); return;
+        }
+        const row = Object.assign({}, d, {
+          qty: U.num(d.qty), goodQty: U.num(d.qty), afkirQty: 0,
+          sku: prod.sku, productName: prod.name, source: d.source, artisanName: d.partyName || d.source
+        });
+        if (existing) DB.update('returns', existing.id, row); else DB.insert('returns', row);
+        UI.toast('Barang kembali diterima. Menunggu QC tim gudang.', 'success');
+        close(); App.refresh();
+      }
+    });
+  };
 
   const returns = {
     render() {
       const tab = state.returnsTab;
       let body = '';
       if (tab === 'kembali') {
-        const rows = DB.all('returns').sort((a, b) => b.date.localeCompare(a.date));
+        const rows = DB.all('returns').filter(r => !r.source || r.source === 'Pengrajin' || r.distributionId).sort((a, b) => b.date.localeCompare(a.date));
         body = UI.pageHead('Barang Kembali dari Pengrajin', 'Penerimaan barang hasil kerja; stok pengrajin otomatis berkurang',
           (can('returns.create') ? '<button class="btn btn-primary" data-act="addReturn">+ Terima Barang Kembali</button>' : '')) +
           '<div class="card"><div class="card-body">' + UI.table({
@@ -225,8 +293,28 @@ Object.assign(window.Views, (function () {
               { label: 'Status', render: r => U.badge('Lulus') },
               { label: 'Catatan', key: 'notes' }
             ], rows,
-            actions: can('qc.update') ? [{ label: 'Edit', act: 'editQc' }, { label: 'Hapus', act: 'delQc', cls: 'danger' }] : [],
+            actions: [
+              ...(can('inbound.create') && can('qc.update') ? [{ label: 'Buat Masuk', act: 'qcInbound' }] : []),
+              ...(can('qc.update') ? [{ label: 'Edit', act: 'editQc' }, { label: 'Hapus', act: 'delQc', cls: 'danger' }] : [])
+            ],
             empty: 'Belum ada proses QC.'
+          }) + '</div></div>';
+      } else if (tab === 'kembali-lain') {
+        const rows = DB.all('returns').filter(r => r.source && r.source !== 'Pengrajin').sort((a, b) => b.date.localeCompare(a.date));
+        body = UI.pageHead('Barang Kembali dari Pemborong / Pinjaman', 'Borong obat, servis, dan sampel pengrajin yang kembali ke gudang',
+          (can('returns.create') ? '<button class="btn btn-primary" data-act="addOtherReturn">+ Terima Barang Kembali</button>' : '')) +
+          '<div class="card"><div class="card-body">' + UI.table({
+            columns: [
+              { label: 'Tanggal', render: r => U.dateID(r.date) },
+              { label: 'Dari', render: r => U.badge(r.source) },
+              { label: 'Nama', key: 'artisanName' },
+              { label: 'Produk', render: r => U.esc(r.productName) + '<br><small>' + U.esc(r.sku) + '</small>' },
+              { label: 'Qty', align: 'right', render: r => U.fmt(r.qty) },
+              { label: 'Masuk QC', align: 'right', render: r => '<strong>' + U.fmt(r.goodQty) + '</strong>' },
+              { label: 'Catatan', key: 'notes' }
+            ], rows,
+            actions: can('returns.update') ? [{ label: 'Edit', act: 'editOtherReturn' }, { label: 'Hapus', act: 'delOtherReturn', cls: 'danger' }] : [],
+            empty: 'Belum ada barang kembali dari pemborong / pinjaman sampel.'
           }) + '</div></div>';
       } else {
         const rows = DB.all('products').filter(p => DB.stock(p.id).ready > 0);
@@ -244,27 +332,88 @@ Object.assign(window.Views, (function () {
           }) + '</div></div>';
       }
       return '<div class="tabs">' +
-        [['kembali', 'Barang Kembali'], ['qc', 'Quality Control'], ['barang-jadi', 'Barang Jadi']].map(x =>
+        [['kembali', 'Barang Kembali'], ['kembali-lain', 'Kembali Borong / Sampel'], ['qc', 'Quality Control'], ['barang-jadi', 'Barang Jadi']].map(x =>
           '<button class="tab ' + (tab === x[0] ? 'active' : '') + '" data-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' + body;
     },
     bind(root) {
       U.$$('[data-tab]', root).forEach(b => b.addEventListener('click', () => { state.returnsTab = b.dataset.tab; App.refresh(); }));
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
-        const x = ({ editReturn: 'returns', delReturn: 'returns', editQc: 'qc', delQc: 'qc' })[act]
-          ? DB.get(({ editReturn: 'returns', delReturn: 'returns', editQc: 'qc', delQc: 'qc' })[act], b.dataset.id) : null;
+        const tableOf = { editReturn: 'returns', delReturn: 'returns', editOtherReturn: 'returns', delOtherReturn: 'returns', editQc: 'qc', delQc: 'qc', qcInbound: 'qc' };
+        const x = tableOf[act] ? DB.get(tableOf[act], b.dataset.id) : null;
         if (act === 'addReturn') window.openReturnForm();
+        if (act === 'addOtherReturn') window.openOtherReturnForm();
         if (act === 'addQc') qcForm(null);
         if (act === 'editReturn' && x) window.openReturnForm(x);
         if (act === 'delReturn' && x) UI.confirm('Hapus penerimaan ini? Barang akan kembali ke pengrajin.', () => { DB.remove('returns', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
+        if (act === 'editOtherReturn' && x) window.openOtherReturnForm(x.source, x);
+        if (act === 'delOtherReturn' && x) UI.confirm('Hapus penerimaan ' + x.source + ' ini?', () => { DB.remove('returns', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
         if (act === 'editQc' && x) qcForm(x);
-        if (act === 'delQc' && x) UI.confirm('Hapus data QC ini? Barang kembali menunggu QC.', () => { DB.remove('qc', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
+        if (act === 'delQc' && x) UI.confirm('Hapus data QC ini? Barang kembali menunggu QC.', () => {
+          if (x.inboundId) DB.remove('inbound', x.inboundId);
+          DB.remove('qc', x.id); UI.toast('Dihapus', 'success'); App.refresh();
+        }, true);
+        if (act === 'qcInbound' && x) {
+          if (x.inboundId) { UI.toast('Barang masuk untuk QC ini sudah dibuat', 'warning'); return; }
+          if (U.num(x.passedQty) <= 0) { UI.toast('Tidak ada barang lulus pada QC ini', 'warning'); return; }
+          const rec = DB.insert('inbound', {
+            date: x.date, supplier: 'Hasil QC', productId: x.productId, sku: x.sku, productName: x.productName,
+            qty: U.num(x.passedQty), condition: 'Baik', receiver: DB.currentUser().name,
+            notes: 'Hasil QC ' + x.id, createdAt: new Date().toISOString()
+          });
+          DB.update('qc', x.id, { inboundId: rec.id });
+          UI.toast('Barang masuk ' + U.fmt(rec.qty) + ' pcs dibuat dari QC', 'success'); App.refresh();
+        }
         if (act === 'ship') window.openOutboundForm(b.dataset.id);
       }));
     }
   };
 
   /* ================= SPK ================= */
+  function spkHtml(s) {
+    const p = pOf(s.productId);
+    const a = DB.get('artisans', s.artisanId) || {};
+    const unit = U.num(p.price), amount = U.num(s.qty) * unit;
+    const row = (label, value) => '<tr><th style="width:150px">' + label + '</th><td>' + (value || '-') + '</td></tr>';
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>SPK ' + U.esc(s.no) + '</title>' +
+      '<style>' +
+      'body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#1e293b}' +
+      '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #7a4a22;padding-bottom:12px;margin-bottom:18px}' +
+      'h1{font-size:19px;margin:0;color:#7a4a22;letter-spacing:.03em}h2{text-align:center;font-size:17px;margin:0 0 18px;text-decoration:underline}' +
+      '.brand{font-size:11px;color:#64748b;margin-top:4px}.no{font-size:13px;text-align:right;line-height:1.7}' +
+      'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px}' +
+      'th,td{border:1px solid #cbd5e1;padding:7px 9px;text-align:left;vertical-align:top}' +
+      '.info th{background:#efe0cc;width:150px}.num{text-align:right}' +
+      '.items th{background:#efe0cc;text-align:center}.items td{text-align:center}.items td.left{text-align:left}' +
+      '.total{margin-left:auto;width:320px}.total td{border:none;padding:5px 0}.total td.num{border-bottom:1px solid #cbd5e1}' +
+      '.grand{font-weight:bold;font-size:14px;background:#f1f5f9}' +
+      '.sign{display:flex;justify-content:space-between;margin-top:44px;font-size:12px;text-align:center}' +
+      '.notes{font-size:12px;min-height:46px;border:1px solid #cbd5e1;padding:9px}' +
+      '.muted{color:#64748b;font-size:11px}@media print{body{padding:10px}.no-print{display:none}}' +
+      '</style></head><body>' +
+      '<div class="head"><div><h1>STOCK SOLID TEAK FURNITURE</h1><div class="brand">Sistem Stok, Produksi & Pengrajin</div></div>' +
+      '<div class="no"><strong>' + U.esc(s.no) + '</strong><br>Tanggal: ' + U.dateID(s.date) + '<br>Target: ' + U.dateID(s.targetDate) + '</div></div>' +
+      '<h2>SURAT PERINTAH KERJA (SPK)</h2>' +
+      '<table class="info">' +
+      row('Ditujukan Kepada', '<strong>' + U.esc(a.name || '-') + '</strong>') +
+      row('Alamat', U.esc(a.address || '-')) +
+      row('Telepon', U.esc(a.phone || '-')) +
+      row('Status', U.esc(s.status || 'Proses')) +
+      '</table>' +
+      '<table class="items"><thead><tr><th>No</th><th>SKU</th><th>Produk</th><th>Ukuran</th><th>Qty</th><th>Harga Satuan</th><th>Nilai</th></tr></thead><tbody>' +
+      '<tr><td>1</td><td>' + U.esc(p.sku || '-') + '</td><td class="left">' + U.esc(p.name || '-') + '</td>' +
+      '<td>' + U.esc(p.size || '-') + '</td><td>' + U.fmt(s.qty) + '</td><td class="num">' + U.rp(unit) + '</td>' +
+      '<td class="num">' + U.rp(amount) + '</td></tr></tbody></table>' +
+      '<table class="total"><tr><td>Total Barang</td><td class="num">' + U.fmt(s.qty) + ' pcs</td></tr>' +
+      '<tr class="grand"><td>TOTAL NILAI PEKERJAAN</td><td class="num">' + U.rp(amount) + '</td></tr></table>' +
+      '<p style="font-size:12px;font-weight:bold;margin:16px 0 5px">Catatan / Instruksi:</p>' +
+      '<div class="notes">' + U.esc(s.notes || 'Kerjakan sesuai spesifikasi dan target waktu yang ditentukan.') + '</div>' +
+      '<div class="sign"><div>Dibuat oleh,<br><br>_______________________<br>Produksi</div>' +
+      '<div>Diterima oleh,<br><br>_______________________<br>' + U.esc(a.name || 'Pengrajin') + '</div></div>' +
+      '<p class="muted" style="margin-top:28px">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</p>' +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
+  }
+
   const spk = {
     render() {
       let rows = DB.all('spk');
@@ -282,11 +431,13 @@ Object.assign(window.Views, (function () {
             { label: 'Pengrajin', render: r => aName(r.artisanId) },
             { label: 'Produk', render: r => pOf(r.productId).name || '-' },
             { label: 'Qty', align: 'right', render: r => U.fmt(r.qty) },
+            { label: 'Nilai', align: 'right', render: r => U.rp(U.num(r.qty) * U.num(pOf(r.productId).price)) },
             { label: 'Target', render: r => U.dateID(r.targetDate) },
             { label: 'Status', render: r => U.badge(r.targetDate < t() && r.status !== 'Selesai' ? 'Terlambat' : r.status) },
             { label: 'Catatan', key: 'notes' }
           ], rows,
           actions: [
+            { label: 'Cetak', act: 'printSpk' },
             ...(can('distributions.create') ? [{ label: 'Distribusi', act: 'dist' }] : []),
             ...(can('spk.update') ? [{ label: 'Edit', act: 'edit' }] : []),
             ...(can('spk.delete') ? [{ label: 'Hapus', act: 'delete', cls: 'danger' }] : [])
@@ -318,6 +469,7 @@ Object.assign(window.Views, (function () {
           });
         }
         if (!x) return;
+        if (b.dataset.act === 'printSpk') printDocument(spkHtml(x), 'SPK disiapkan untuk dicetak');
         if (b.dataset.act === 'dist') window.openDistributionForm(null, x.artisanId, x.id);
         if (b.dataset.act === 'edit') UI.formModal({
           title: 'Edit SPK', wide: true, values: x,
@@ -357,12 +509,12 @@ Object.assign(window.Views, (function () {
       }).sort((a, b) => b.date.localeCompare(a.date)).map(x => [U.dateID(x.date), x.type, x.sku, x.productName, x.qty, x.destination, x.artisanReceiver, x.suratJalan, x.staff, x.notes]);
     }
     if (state.reportTab === 'stok') {
-      return DB.all('products').filter(p => !state.reportProduct || p.id === state.reportProduct)
+      return U.sortBySKU(DB.all('products')).filter(p => !state.reportProduct || p.id === state.reportProduct)
         .filter(p => !state.reportCategory || p.category === state.reportCategory)
         .filter(p => !state.reportStatus || p.status === state.reportStatus)
         .map(p => { const s = DB.stock(p.id); return [p.sku, p.name, p.category, p.status, s.warehouse, s.process, s.qc, s.ready, s.damaged, s.total]; });
     }
-    return DB.all('artisans').filter(a => !state.reportArtisan || a.id === state.reportArtisan).map(a => {
+    return U.sortByName(DB.all('artisans')).filter(a => !state.reportArtisan || a.id === state.reportArtisan).map(a => {
       const s = DB.artisanStats(a.id);
       return [a.id, a.name, a.specialization, s.received, s.finished, s.unfinished, s.afkir, s.lateCount];
     });
@@ -385,7 +537,7 @@ Object.assign(window.Views, (function () {
         '<div class="toolbar"><label>Dari <input type="date" id="rFrom" value="' + U.esc(state.from) + '"></label>' +
         '<label>Sampai <input type="date" id="rTo" value="' + U.esc(state.to) + '"></label>' +
         '<select id="rProduct"><option value="">Semua produk</option>' + pOpts().map(o => '<option value="' + o.value + '"' + (state.reportProduct === o.value ? ' selected' : '') + '>' + U.esc(o.label) + '</option>').join('') + '</select>' +
-        '<select id="rCat"><option value="">Semua kategori</option>' + U.unique(DB.all('products').map(p => p.category)).map(c => '<option' + (state.reportCategory === c ? ' selected' : '') + '>' + U.esc(c) + '</option>').join('') + '</select>' +
+        '<select id="rCat"><option value="">Semua kategori</option>' + DB.getCategories().map(c => '<option' + (state.reportCategory === c ? ' selected' : '') + '>' + U.esc(c) + '</option>').join('') + '</select>' +
         '<select id="rArtisan"><option value="">Semua pengrajin</option>' + aOpts().map(o => '<option value="' + o.value + '"' + (state.reportArtisan === o.value ? ' selected' : '') + '>' + U.esc(o.label) + '</option>').join('') + '</select>' +
         '<select id="rStatus"><option value="">Semua status</option>' +
           (state.reportTab === 'keluar' ? ['Customer', 'Borong Obat', 'Rusak/Afkir'] : ['Gudang', 'Proses Obat', 'Barang Jadi']).map(s => '<option' + (state.reportStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') +
@@ -414,8 +566,8 @@ Object.assign(window.Views, (function () {
       const s = q.toLowerCase();
       const match = obj => Object.values(obj).some(v => typeof v !== 'object' && String(v || '').toLowerCase().includes(s));
       const groups = [
-        ['Produk', DB.all('products').filter(match), '#/products', p => p.name + ' · ' + p.sku],
-        ['Pengrajin', DB.all('artisans').filter(match), '#/artisans', a => a.name + ' · ' + a.id],
+        ['Produk', U.sortBySKU(DB.all('products')).filter(match), '#/products', p => p.name + ' · ' + p.sku],
+        ['Pengrajin', U.sortByName(DB.all('artisans')).filter(match), '#/artisans', a => a.name + ' · ' + a.id],
         ['Barang Masuk', DB.all('inbound').filter(match), '#/inbound', x => x.productName + ' · ' + x.qty + ' pcs'],
         ['Barang Keluar', DB.all('outbound').filter(match), '#/outbound', x => x.productName + ' · ' + x.qty + ' pcs'],
         ['Distribusi', DB.all('distributions').filter(match), '#/distributions', x => x.artisanName + ' · ' + x.productName],
@@ -553,7 +705,7 @@ Object.assign(window.Views, (function () {
         '<div class="card"><div class="card-head"><h3>Langkah persiapan (sekali saja)</h3></div><div class="card-body">' +
         '<ol style="line-height:1.9;margin:0;padding-left:20px">' +
         '<li>Buat project gratis di <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a>.</li>' +
-        '<li>Buka <strong>SQL Editor</strong> → <strong>New query</strong> → salin seluruh isi file <code>supabase/schema.sql</code> → <strong>Run</strong>.</li>' +
+        '<li>Buka <strong>SQL Editor</strong> → <strong>New query</strong> → jalankan <code>supabase/schema.sql</code> untuk project baru, atau untuk project lama jalankan berurutan: <code>fix-auth.sql</code>, <code>fix-permission.sql</code>, <code>add-wages.sql</code>, <code>add-borong.sql</code>, <code>add-online-updates.sql</code>, <code>update-passwords.sql</code>. Detail ada di <code>PANDUAN-ONLINE.md</code>.</li>' +
         '<li>Buka <strong>Project Settings → API</strong>. Salin <strong>Project URL</strong> dan <strong>anon/public key</strong>.</li>' +
         '<li>Tempel keduanya di atas, lalu klik <strong>Aktifkan Supabase</strong>. Data contoh akan otomatis terunggah.</li>' +
         '<li>Deploy ulang folder aplikasi ke hosting gratis. Semua perangkat yang membuka link akan memakai database yang sama.</li>' +
@@ -576,7 +728,7 @@ Object.assign(window.Views, (function () {
         '</div><div id="bkStatus" class="hint" style="margin-top:10px">' +
         (bk.sheetUrl ? 'Sheet: ' + U.esc(bk.sheetUrl) : 'Belum ada Google Sheet tertaut.') + '</div>' +
         '</div></div><br>' +
-        '<div class="notice error"><strong>Catatan keamanan:</strong> schema Supabase di atas memakai policy akses penuh untuk kemudahan internal/demo. Untuk pemakaian publik, sebaiknya aktifkan Supabase Auth dan ganti RLS policy dengan pemeriksaan <code>auth.uid()</code>. Akun demo (admin/admin123, dll.) dibuat oleh schema.sql dan diverifikasi lewat fungsi <code>authenticate()</code> di server. Untuk backup: siapa pun yang tahu Web App URL + token bisa menimpa sheet, jadi simpan token baik-baik.</div>';
+        '<div class="notice error"><strong>Catatan keamanan:</strong> schema Supabase di atas memakai policy akses penuh untuk kemudahan internal/demo. Untuk pemakaian publik, sebaiknya aktifkan Supabase Auth dan ganti RLS policy dengan pemeriksaan <code>auth.uid()</code>. Akun bawaan dibuat oleh schema.sql dan diverifikasi lewat fungsi <code>authenticate()</code> di server. Untuk backup: siapa pun yang tahu Web App URL + token bisa menimpa sheet, jadi simpan token baik-baik.</div>';
     },
     bind(root) {
       const urlEl = U.$('#sbUrl', root), keyEl = U.$('#sbKey', root);
@@ -658,13 +810,16 @@ Object.assign(window.Views, (function () {
     UI.formModal({
       title: existing ? 'Edit Gaji Harian' : 'Catat Gaji Harian', wide: true,
       values: existing || {
-        date: U.today(), employee: '', dailyWage: 150000, overtimeRate: 25000,
+        date: U.today(), employee: '', position: DB.JOB_TITLES[0], dailyWage: 150000, overtimeRate: 25000,
         days: 1, overtimeHours: 0, notes: ''
       },
-      notice: 'Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
+      notice: 'Isi Nama Karyawan dan Jabatan sesuai peran di perusahaan: ' +
+        'Manager/Mandor/Angkat Junjung mengawasi pekerjaan, Pemborong Amplas mengerjakan amplas, ' +
+        'Pemborong Packing mengerjakan packing. Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
       fields: [
         { key: 'date', label: 'Tanggal', type: 'date', required: true },
         { key: 'employee', label: 'Nama Karyawan', type: 'datalist', options: names, required: true, placeholder: 'mis. Rizky Prasetyo' },
+        { key: 'position', label: 'Jabatan dalam Perusahaan', type: 'select', options: DB.JOB_TITLES, required: true, placeholder: '-- Pilih jabatan --' },
         { key: 'dailyWage', label: 'Gaji Harian (Rp)', type: 'number', min: 0, step: 1000, required: true },
         { key: 'overtimeRate', label: 'Upah Lembur per Jam (Rp)', type: 'number', min: 0, step: 1000, required: true },
         { key: 'days', label: 'Jumlah Masuk (hari)', type: 'number', min: 0, step: 0.5, required: true },
@@ -681,6 +836,49 @@ Object.assign(window.Views, (function () {
         closeFn(); App.refresh();
       }
     });
+  }
+
+  function wageDailyHtml(w) {
+    const basic = U.num(w.days) * U.num(w.dailyWage);
+    const ot = U.num(w.overtimeHours) * U.num(w.overtimeRate);
+    const row = (label, value) => '<tr><th style="width:190px">' + label + '</th><td>' + value + '</td></tr>';
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Bukti Gaji ' + U.esc(w.employee) + '</title>' +
+      '<style>' +
+      'body{font-family:Segoe UI,Arial,sans-serif;padding:26px;color:#1e293b}' +
+      '.head{display:flex;justify-content:space-between;border-bottom:3px solid #7a4a22;padding-bottom:12px;margin-bottom:18px}' +
+      'h1{font-size:19px;margin:0;color:#7a4a22}h2{text-align:center;font-size:16px;margin:0 0 18px;text-decoration:underline}' +
+      '.brand{font-size:11px;color:#64748b;margin-top:4px}.no{font-size:12px;text-align:right;line-height:1.7}' +
+      'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px}' +
+      'th,td{border:1px solid #cbd5e1;padding:7px 9px;text-align:left}.info th{background:#efe0cc;width:190px}' +
+      '.summary{width:360px;margin-left:auto}.summary td{border:none;padding:6px 0}.summary td:last-child{border-bottom:1px solid #cbd5e1;text-align:right}' +
+      '.grand{font-weight:bold;font-size:14px;background:#f1f5f9}' +
+      '.sign{display:flex;justify-content:space-between;margin-top:44px;font-size:12px;text-align:center}' +
+      '.notes{font-size:12px;min-height:40px;border:1px solid #cbd5e1;padding:9px}' +
+      '.muted{color:#64748b;font-size:11px}@media print{body{padding:10px}}' +
+      '</style></head><body>' +
+      '<div class="head"><div><h1>STOCK SOLID TEAK FURNITURE</h1><div class="brand">Sistem Stok, Produksi & Pengrajin</div></div>' +
+      '<div class="no"><strong>' + U.esc(w.employee) + '</strong><br>' + U.esc(w.position || '-') + '<br>Tanggal: ' + U.dateID(w.date) + '</div></div>' +
+      '<h2>BUKTI GAJI HARIAN</h2>' +
+      '<table class="info">' +
+      row('Nama Karyawan', '<strong>' + U.esc(w.employee) + '</strong>') +
+      row('Jabatan', U.esc(w.position || '-')) +
+      row('Tanggal', U.dateID(w.date)) +
+      row('Jumlah Masuk', U.num(w.days) + ' hari') +
+      row('Gaji Harian', U.rp(w.dailyWage)) +
+      row('Jam Lembur', U.num(w.overtimeHours) + ' jam') +
+      row('Upah Lembur / Jam', U.rp(w.overtimeRate)) +
+      '</table>' +
+      '<table class="summary">' +
+      '<tr><td>Gaji Pokok (' + U.num(w.days) + ' hari)</td><td>' + U.rp(basic) + '</td></tr>' +
+      '<tr><td>Upah Lembur (' + U.num(w.overtimeHours) + ' jam)</td><td>' + U.rp(ot) + '</td></tr>' +
+      '<tr class="grand"><td>TOTAL DITERIMA</td><td>' + U.rp(DB.wageTotal(w)) + '</td></tr>' +
+      '</table>' +
+      '<p style="font-size:12px;font-weight:bold;margin:16px 0 5px">Catatan:</p>' +
+      '<div class="notes">' + U.esc(w.notes || '-') + '</div>' +
+      '<div class="sign"><div>Diterima oleh,<br><br>_______________________<br>' + U.esc(w.employee) + '</div>' +
+      '<div>Dibayar oleh,<br><br>_______________________<br>Perusahaan</div></div>' +
+      '<p class="muted" style="margin-top:28px">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</p>' +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
   }
 
   function slipHtml(week, bonus, debt, late) {
@@ -704,7 +902,9 @@ Object.assign(window.Views, (function () {
       '@media print{body{padding:12px}.no-print{display:none}}' +
       '</style></head><body>' +
       '<div class="head"><div><h1>SLIP GAJI MINGGUAN</h1><div class="muted">CV Furniture Jati — Sistem Stok & Produksi</div></div>' +
-      '<div style="text-align:right"><strong>' + U.esc(week.employee) + '</strong><br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span></div></div>' +
+      '<div style="text-align:right"><strong>' + U.esc(week.employee) + '</strong>' +
+      (week.position ? '<br><span class="muted">Jabatan: ' + U.esc(week.position) + '</span>' : '') +
+      '<br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span></div></div>' +
       '<h2>Rincian Kehadiran & Lembur</h2>' +
       '<table><thead><tr><th>Tanggal</th><th>Masuk (hari)</th><th>Gaji/hari</th><th>Gaji Pokok</th><th>Lembur (jam)</th><th>Upah Lembur</th></tr></thead>' +
       '<tbody>' + (detail || '<tr><td colspan="6" style="text-align:center">Tidak ada data pada periode ini</td></tr>') + '</tbody></table>' +
@@ -723,19 +923,7 @@ Object.assign(window.Views, (function () {
   }
 
   function printSlip(week, bonus, debt, late) {
-    const html = slipHtml(week, bonus, debt, late);
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); return; }
-    // Fallback kalau popup diblokir: cetak lewat iframe tersembunyi
-    const frame = document.createElement('iframe');
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-    frame.srcdoc = html;
-    frame.onload = () => {
-      try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) {}
-      setTimeout(() => frame.remove(), 1500);
-    };
-    document.body.appendChild(frame);
-    UI.toast('Slip disiapkan untuk dicetak', 'success');
+    printDocument(slipHtml(week, bonus, debt, late), 'Slip disiapkan untuk dicetak');
   }
 
   const payroll = {
@@ -747,8 +935,9 @@ Object.assign(window.Views, (function () {
       if (!state.slipWeek) state.slipWeek = weekStart(U.today());
 
       let rows = allW.filter(w => (!state.payrollFrom || w.date >= state.payrollFrom) && (!state.payrollTo || w.date <= state.payrollTo));
-      rows = filterRows(rows, state.payrollQ, ['employee', 'date', 'notes']);
+      rows = filterRows(rows, state.payrollQ, ['employee', 'position', 'date', 'notes']);
       if (state.payrollEmployee) rows = rows.filter(w => w.employee === state.payrollEmployee);
+      if (state.payrollPosition) rows = rows.filter(w => w.position === state.payrollPosition);
       rows.sort((a, b) => b.date.localeCompare(a.date));
 
       const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
@@ -756,8 +945,9 @@ Object.assign(window.Views, (function () {
       const net = week.subtotal + bonus - debt - late;
       const weekOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
       const empOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.payrollEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const posOpts = DB.JOB_TITLES.map(p => '<option' + (state.payrollPosition === p ? ' selected' : '') + '>' + U.esc(p) + '</option>').join('');
 
-      return UI.pageHead('Gaji Karyawan Harian', 'Catatan upah harian, lembur, dan cetak slip gaji mingguan',
+      return UI.pageHead('Gaji Karyawan Harian', 'Nama karyawan & jabatan (Manager/Mandor/Angkat Junjung, Pemborong Amplas, Pemborong Packing), upah harian, lembur, dan slip mingguan',
           (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
           '<button class="btn" data-act="printSlip">🖨️ Cetak Slip Mingguan</button>') +
         '<div class="grid grid-stats">' +
@@ -769,15 +959,17 @@ Object.assign(window.Views, (function () {
         '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
         '<button class="btn btn-sm" data-act="wageExcel">⬇ Excel</button>' +
         '<button class="btn btn-sm" data-act="wagePdf">⬇ PDF</button></span></div><div class="card-body">' +
-        '<div class="toolbar"><input id="wageQ" placeholder="Cari nama karyawan / catatan..." value="' + U.esc(state.payrollQ) + '">' +
+        '<div class="toolbar"><input id="wageQ" placeholder="Cari nama / jabatan / catatan..." value="' + U.esc(state.payrollQ) + '">' +
         '<input type="date" id="wageFrom" value="' + U.esc(state.payrollFrom) + '">' +
         '<input type="date" id="wageTo" value="' + U.esc(state.payrollTo) + '">' +
         '<select id="wageEmployee"><option value="">Semua karyawan</option>' + empOpts + '</select>' +
+        '<select id="wagePosition"><option value="">Semua jabatan</option>' + posOpts + '</select>' +
         '<div class="spacer"></div><strong>Total: ' + U.rp(U.sum(rows, DB.wageTotal)) + '</strong></div>' +
         UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
             { label: 'Nama Karyawan', key: 'employee' },
+            { label: 'Jabatan', render: r => U.badge(r.position || '-') },
             { label: 'Gaji Harian', align: 'right', render: r => U.rp(r.dailyWage) },
             { label: 'Lembur / Jam', align: 'right', render: r => U.rp(r.overtimeRate) },
             { label: 'Masuk', align: 'right', render: r => U.num(r.days) + ' hari' },
@@ -787,7 +979,8 @@ Object.assign(window.Views, (function () {
             { label: 'Total', align: 'right', render: r => '<strong>' + U.rp(DB.wageTotal(r)) + '</strong>' },
             { label: 'Catatan', key: 'notes' }
           ], rows,
-          actions: can('payroll.edit') ? [{ label: 'Edit', act: 'editWage' }, { label: 'Hapus', act: 'delWage', cls: 'danger' }] : [],
+          actions: [{ label: 'Cetak', act: 'printWage' },
+            ...(can('payroll.edit') ? [{ label: 'Edit', act: 'editWage' }, { label: 'Hapus', act: 'delWage', cls: 'danger' }] : [])],
           empty: 'Belum ada catatan gaji harian.'
         }) + '</div></div><br>' +
         '<div class="card"><div class="card-head"><h3>🧾 Slip Gaji Mingguan</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' — ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
@@ -798,6 +991,8 @@ Object.assign(window.Views, (function () {
         '<div class="field"><label>Total Bon / Hutang (Rp)</label><input type="number" id="slipDebt" min="0" step="1000" value="' + debt + '"></div>' +
         '<div class="field"><label>Potongan Telat Masuk (Rp)</label><input type="number" id="slipLate" min="0" step="1000" value="' + late + '"></div>' +
         '</div>' +
+        '<div class="notice" style="margin-top:12px">Jabatan: <strong>' + U.esc(week.position || '-') + '</strong>. ' +
+        'Manager/Mandor/Angkat Junjung = pengawas pekerjaan; Pemborong Amplas = pelaksana amplas; Pemborong Packing = pelaksana packing.</div>' +
         '<div style="margin-top:14px">' + UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
@@ -823,6 +1018,7 @@ Object.assign(window.Views, (function () {
       U.$('#wageFrom', root).addEventListener('change', e => { state.payrollFrom = e.target.value; App.refresh(); });
       U.$('#wageTo', root).addEventListener('change', e => { state.payrollTo = e.target.value; App.refresh(); });
       U.$('#wageEmployee', root).addEventListener('change', e => { state.payrollEmployee = e.target.value; App.refresh(); });
+      U.$('#wagePosition', root).addEventListener('change', e => { state.payrollPosition = e.target.value; App.refresh(); });
       U.$('#slipEmployee', root).addEventListener('change', e => { state.slipEmployee = e.target.value; App.refresh(); });
       U.$('#slipWeek', root).addEventListener('change', e => { state.slipWeek = e.target.value; App.refresh(); });
 
@@ -840,6 +1036,10 @@ Object.assign(window.Views, (function () {
 
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
+        if (act === 'printWage') {
+          const w = DB.get('wages', b.dataset.id);
+          if (w) printDocument(wageDailyHtml(w), 'Bukti gaji disiapkan untuk dicetak');
+        }
         if (act === 'addWage') { if (can('payroll.edit')) wageForm(null); }
         if (act === 'editWage') { const w = DB.get('wages', b.dataset.id); if (w && can('payroll.edit')) wageForm(w); }
         if (act === 'delWage') {
@@ -850,12 +1050,357 @@ Object.assign(window.Views, (function () {
           printSlip(week, U.num(state.slipBonus), U.num(state.slipDebt), U.num(state.slipLate));
         }
         if (act === 'wageExcel' || act === 'wagePdf') {
-          const rows = [['Tanggal', 'Nama Karyawan', 'Gaji Harian', 'Lembur/Jam', 'Jumlah Masuk', 'Jam Lembur', 'Gaji Pokok', 'Upah Lembur', 'Total', 'Catatan']]
+          const rows = [['Tanggal', 'Nama Karyawan', 'Jabatan', 'Gaji Harian', 'Lembur/Jam', 'Jumlah Masuk', 'Jam Lembur', 'Gaji Pokok', 'Upah Lembur', 'Total', 'Catatan']]
             .concat(DB.all('wages').sort((a, b) => b.date.localeCompare(a.date)).map(w => [
-              U.dateID(w.date), w.employee, w.dailyWage, w.overtimeRate, w.days, w.overtimeHours,
+              U.dateID(w.date), w.employee, w.position || '', w.dailyWage, w.overtimeRate, w.days, w.overtimeHours,
               U.num(w.days) * U.num(w.dailyWage), U.num(w.overtimeHours) * U.num(w.overtimeRate), DB.wageTotal(w), w.notes || ''
             ]));
           if (act === 'wageExcel') U.exportExcel('laporan-gaji-karyawan', rows); else U.exportPDF('Laporan Gaji Karyawan', rows);
+        }
+      }));
+    }
+  };
+
+  /* ================= GAJI BORONG AMPLAS & PACKING ================= */
+  const borongNames = () => U.unique(DB.all('wages').map(w => w.employee)
+    .concat(DB.all('borong').map(b => b.employee))).filter(Boolean).sort(U.natCompare);
+  const rateOf = (p, type) => U.num(type === 'Packing' ? p.ratePacking : p.rateAmplas);
+
+  function borongForm(existing, mode) {
+    const assign = mode === 'assign';
+    let items = existing ? JSON.parse(JSON.stringify(existing.items || [])) : [];
+    let curType = existing ? existing.type : 'Amplas';
+    const opts = pOpts();
+
+    const itemHTML = (it, i) =>
+      '<div class="borong-item" data-i="' + i + '">' +
+        '<select class="bi-product" data-i="' + i + '"><option value="">-- Pilih produk --</option>' +
+        opts.map(o => '<option value="' + o.value + '"' + (o.value === it.productId ? ' selected' : '') + '>' + U.esc(o.label) + '</option>').join('') + '</select>' +
+        '<input class="bi-target" data-i="' + i + '" type="number" min="0" step="1" placeholder="Target" value="' + U.esc(it.targetQty || it.qty || 0) + '">' +
+        '<input class="bi-qty" data-i="' + i + '" type="number" min="0" step="1" placeholder="Selesai" value="' + U.esc(it.qty) + '">' +
+        '<input class="bi-rate" data-i="' + i + '" type="number" min="0" step="1000" placeholder="Rp/pcs" value="' + U.esc(it.rate) + '">' +
+        '<input class="bi-ot" data-i="' + i + '" type="number" min="0" step="1000" placeholder="Lembur Rp" value="' + U.esc(it.overtime || 0) + '">' +
+        '<strong class="bi-amount" data-i="' + i + '">' + U.rp(DB.borongItemTotal(it)) + '</strong>' +
+        '<button type="button" class="btn btn-sm btn-danger bi-del" data-i="' + i + '">✕</button></div>';
+
+    const sync = () => {
+      U.$$('.borong-item', U.$('#modalRoot')).forEach(row => {
+        const i = Number(row.dataset.i);
+        const p = DB.get('products', U.$('.bi-product', row).value) || {};
+        items[i] = {
+          productId: p.id || '', sku: p.sku || '', name: p.name || '',
+          targetQty: U.num(U.$('.bi-target', row).value),
+          qty: U.num(U.$('.bi-qty', row).value),
+          rate: U.num(U.$('.bi-rate', row).value),
+          overtime: U.num(U.$('.bi-ot', row).value)
+        };
+      });
+    };
+    const recalc = () => {
+      const target = U.sum(items, DB.borongItemTarget);
+      const done = U.sum(items, it => U.num(it.qty));
+      const subtotal = U.sum(items, DB.borongItemTotal);
+      const extra = U.num(U.$('#borongExtra')?.value);
+      U.$$('.bi-amount', U.$('#modalRoot')).forEach(el => {
+        const it = items[Number(el.dataset.i)];
+        if (it) el.textContent = U.rp(DB.borongItemTotal(it));
+      });
+      const el = U.$('#borongTotal');
+      if (el) el.innerHTML =
+        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Target barang</span><span>' + U.fmt(target) + ' pcs</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Selesai dikerjakan</span><span>' + U.fmt(done) + ' pcs</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Upah (selesai × tarif)</span><span>' + U.rp(subtotal) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tambahan lembur</span><span>' + U.rp(extra) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:16px;border-top:1px solid var(--border)"><span>TOTAL</span><span>' + U.rp(subtotal + extra) + '</span></div>';
+    };
+    const bindItems = () => {
+      const m = U.$('#modalRoot');
+      U.$$('.bi-product', m).forEach(sel => sel.addEventListener('change', () => {
+        sync();
+        const i = Number(sel.dataset.i), p = DB.get('products', sel.value) || {};
+        items[i] = Object.assign({}, items[i], { productId: p.id || '', sku: p.sku || '', name: p.name || '', rate: rateOf(p, curType) });
+        drawItems();
+      }));
+      U.$$('.bi-target, .bi-qty, .bi-rate, .bi-ot', m).forEach(inp => inp.addEventListener('input', () => { sync(); recalc(); }));
+      U.$$('.bi-del', m).forEach(btn => btn.addEventListener('click', () => { sync(); items.splice(Number(btn.dataset.i), 1); drawItems(); }));
+    };
+    const drawItems = () => {
+      const box = U.$('#borongItems');
+      if (box) box.innerHTML = items.map(itemHTML).join('');
+      bindItems(); recalc();
+    };
+
+    UI.openModal(UI.modalHead(assign ? 'Tugaskan Borong Harian' : (existing ? 'Edit Gaji Borong' : 'Catat Gaji Borong')) +
+      '<form id="borongForm"><div class="modal-body">' +
+      '<div class="notice">' + (assign
+        ? 'Pilih <strong>Admin yang Menangani</strong> (mis. admin gudang yang memegang karyawan bernama Ulin), isi karyawan yang dipegang bila perlu, lalu <strong>Nama Pemborong</strong> penerima borong. Kolom <strong>Target</strong> = rencana, <strong>Selesai</strong> = realisasi. Owner memantau progres di tabel ini.'
+        : 'Tarif per pcs otomatis diambil dari <strong>Database Produk</strong>. Kolom <strong>Selesai</strong> dipakai sebagai jumlah upah.') + '</div><br>' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>Tanggal</label><input type="date" id="borongDate" required value="' + U.esc(existing ? existing.date : U.today()) + '"></div>' +
+      '<div class="field"><label>Admin yang Menangani</label><select id="borongAdminId" required><option value="">-- Pilih admin --</option>' +
+      adminOpts().map(a => '<option value="' + a.value + '"' + ((existing ? existing.handledById : (DB.currentUser() || {}).id) === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>Karyawan yang Dipegang</label><input type="text" id="borongWorker" placeholder="mis. Ulin (opsional)" value="' + U.esc(existing ? existing.workerName || '' : '') + '"></div>' +
+      '<div class="field"><label>Nama Pemborong</label><input type="text" id="borongEmployeeName" list="dl_borongEmp" required placeholder="mis. Sinta Wulandari" value="' + U.esc(existing ? existing.employee : '') + '">' +
+      '<datalist id="dl_borongEmp">' + borongNames().map(n => '<option value="' + U.esc(n) + '"></option>').join('') + '</datalist></div>' +
+      '<div class="field"><label>Jenis Pekerjaan</label><select id="borongJobType"><option' + (curType === 'Amplas' ? ' selected' : '') + '>Amplas</option><option' + (curType === 'Packing' ? ' selected' : '') + '>Packing</option></select></div>' +
+      '<div class="field"><label>Catatan</label><input type="text" id="borongNotes" placeholder="Opsional" value="' + U.esc(existing ? existing.notes || '' : '') + '"></div>' +
+      '</div><div class="section-title">Barang yang Dikerjakan</div>' +
+      '<div class="borong-head"><span>Produk</span><span>Target</span><span>Selesai</span><span>Rp/pcs</span><span>Lembur Rp</span><span>Jumlah</span><span></span></div>' +
+      '<div id="borongItems"></div>' +
+      '<button type="button" class="btn btn-sm" id="borongAddItem">+ Tambah Item</button>' +
+      '<div class="form-grid" style="margin-top:14px"><div class="field"><label>Tambahan Lembur Lainnya (Rp)</label>' +
+      '<input type="number" id="borongExtra" min="0" step="1000" value="' + U.esc(existing ? existing.overtimeExtra || 0 : 0) + '"></div></div>' +
+      '<div id="borongTotal" style="max-width:360px;margin:14px 0 0 auto"></div>' +
+      '</div><div class="modal-foot"><button type="button" class="btn" data-close>Batal</button>' +
+      '<button type="submit" class="btn btn-primary">Simpan</button></div></form>', { wide: true });
+
+    const m = U.$('#modalRoot');
+    U.$('#borongJobType', m).addEventListener('change', e => {
+      curType = e.target.value; sync();
+      items.forEach(it => { const p = DB.get('products', it.productId) || {}; it.rate = rateOf(p, curType); });
+      drawItems();
+    });
+    U.$('#borongExtra', m).addEventListener('input', recalc);
+    U.$('#borongAddItem', m).addEventListener('click', () => {
+      sync(); items.push({ productId: '', sku: '', name: '', targetQty: 1, qty: assign ? 0 : 1, rate: 0, overtime: 0 }); drawItems();
+    });
+    U.$('#borongForm', m).addEventListener('submit', e => {
+      e.preventDefault(); sync();
+      const employee = U.$('#borongEmployeeName', m).value.trim();
+      if (!employee) { UI.toast('Nama pemborong wajib diisi', 'warning'); return; }
+      const clean = items.filter(it => it.productId && U.num(it.targetQty) > 0);
+      if (!clean.length) { UI.toast('Pilih minimal satu produk dengan target > 0', 'warning'); return; }
+      const handledById = U.$('#borongAdminId', m).value;
+      if (!handledById) { UI.toast('Admin yang menangani wajib dipilih', 'warning'); return; }
+      const d = {
+        date: U.$('#borongDate', m).value, handledById, handledByName: adminName(handledById),
+        workerName: U.$('#borongWorker', m).value.trim(),
+        employee, type: U.$('#borongJobType', m).value,
+        items: clean, overtimeExtra: U.num(U.$('#borongExtra', m).value),
+        notes: U.$('#borongNotes', m).value.trim()
+      };
+      if (existing) { DB.update('borong', existing.id, d); UI.toast('Data borong diperbarui', 'success'); }
+      else { DB.insert('borong', d); UI.toast(assign ? 'Penugasan borong disimpan' : 'Gaji borong dicatat', 'success'); }
+      UI.closeModal(); App.refresh();
+    });
+    drawItems();
+  }
+
+  function borongSlipHtml(week, extra) {
+    const grand = week.subtotal + extra;
+    const itemRows = week.items.map(it =>
+      '<tr><td>' + U.dateID(it.date) + '</td><td>' + U.esc(it.handledByName || adminName(it.handledById)) + '</td>' +
+      '<td>' + U.esc(it.type) + '</td><td>' + U.esc(it.sku) + '</td>' +
+      '<td>' + U.esc(it.name) + '</td><td style="text-align:right">' + U.fmt(DB.borongItemTarget(it)) + '</td>' +
+      '<td style="text-align:right">' + U.fmt(it.qty) + '</td>' +
+      '<td style="text-align:right">' + U.rp(it.rate) + '</td>' +
+      '<td style="text-align:right">' + U.rp(U.num(it.qty) * U.num(it.rate)) + '</td>' +
+      '<td style="text-align:right">' + U.rp(it.overtime) + '</td>' +
+      '<td style="text-align:right">' + U.rp(DB.borongItemTotal(it)) + '</td></tr>').join('');
+    const recap = week.rows.map(b =>
+      '<tr><td>' + U.dateID(b.date) + '</td><td>' + U.esc(b.handledByName || adminName(b.handledById)) + '</td>' +
+      '<td>' + U.esc(b.type) + '</td><td>' + (b.items || []).length + ' item</td>' +
+      '<td style="text-align:right">' + U.rp(U.sum(b.items || [], it => U.num(it.qty) * U.num(it.rate))) + '</td>' +
+      '<td style="text-align:right">' + U.rp(U.sum(b.items || [], it => U.num(it.overtime)) + U.num(b.overtimeExtra)) + '</td>' +
+      '<td style="text-align:right">' + U.rp(DB.borongTotal(b)) + '</td></tr>').join('');
+    const line = (label, value, bold) => '<tr' + (bold ? ' style="font-weight:bold;background:#f1f5f9"' : '') + '><td>' + label + '</td><td style="text-align:right">' + U.rp(value) + '</td></tr>';
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Slip Borong ' + U.esc(week.employee || 'Semua Orang') + '</title>' +
+      '<style>' +
+      'body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#1e293b}' +
+      'h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:18px 0 8px}' +
+      '.head{display:flex;justify-content:space-between;border-bottom:2px solid #7a4a22;padding-bottom:12px;margin-bottom:16px}' +
+      '.muted{color:#64748b;font-size:12px}table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:14px}' +
+      'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}th{background:#efe0cc}' +
+      '.summary{width:340px;margin-left:auto}.sign{display:flex;justify-content:space-between;margin-top:44px;font-size:12px}' +
+      '@media print{body{padding:10px}}' +
+      '</style></head><body>' +
+      '<div class="head"><div><h1>SLIP GAJI BORONG</h1><div class="muted">Amplas & Packing — CV Furniture Jati</div></div>' +
+      '<div style="text-align:right"><strong>' + U.esc(week.employee || 'Semua Orang') + '</strong><br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span>' +
+      (week.rows[0] ? '<br><span class="muted">Admin: ' + U.esc(week.rows[0].handledByName || '-') + (week.rows[0].workerName ? ' · Karyawan: ' + U.esc(week.rows[0].workerName) : '') + '</span>' : '') + '</div></div>' +
+      '<h2>Rincian Barang per Orang</h2>' +
+      '<table><thead><tr><th>Tanggal</th><th>Admin</th><th>Jenis</th><th>SKU</th><th>Produk</th><th>Target</th><th>Selesai</th><th>Tarif</th><th>Upah</th><th>Lembur</th><th>Jumlah</th></tr></thead>' +
+      '<tbody>' + (itemRows || '<tr><td colspan="11" style="text-align:center">Tidak ada data pada periode ini</td></tr>') + '</tbody></table>' +
+      '<h2>Rekap per Hari</h2>' +
+      '<table><thead><tr><th>Tanggal</th><th>Admin</th><th>Jenis</th><th>Item</th><th>Upah Borong</th><th>Lembur</th><th>Total</th></tr></thead>' +
+      '<tbody>' + (recap || '<tr><td colspan="7" style="text-align:center">-</td></tr>') + '</tbody></table>' +
+      '<h2>Rekapitulasi</h2>' +
+      '<table class="summary">' + line('Upah Borong', week.basic) + line('Lembur per Item', U.sum(week.items, it => U.num(it.overtime))) +
+      line('Tambahan Lembur', extra) + line('TOTAL GAJI BORONG', grand, true) + '</table>' +
+      '<div class="sign"><div>Diterima oleh,<br><br>_______________________</div><div>Dibayar oleh,<br><br>_______________________</div></div>' +
+      '<p class="muted" style="margin-top:24px">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</p>' +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
+  }
+  function printBorongSlip(week, extra) {
+    printDocument(borongSlipHtml(week, extra), 'Slip borong disiapkan untuk dicetak');
+  }
+
+  function workMonitorHtml() {
+    const d = state.monitorDate || U.today();
+    const w = DB.dailyWorkSummary(d);
+    const pct = (done, target) => target > 0 ? Math.min(100, Math.round(U.num(done) / U.num(target) * 100)) : 0;
+    const bar = (done, target) => {
+      const n = pct(done, target);
+      return '<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--border);border-radius:8px;height:7px;overflow:hidden">' +
+        '<div style="height:100%;width:' + n + '%;background:var(--primary)"></div></div><small>' + n + '%</small></div>';
+    };
+    const empty = (text, cols) => '<tr><td colspan="' + cols + '" style="text-align:center;color:var(--muted)">' + text + '</td></tr>';
+    const prodRows = w.production.length ? w.production.map(r =>
+      '<tr><td>' + U.esc(r.name) + '</td><td style="text-align:right">' + U.fmt(r.given) + '</td>' +
+      '<td style="text-align:right"><strong>' + U.fmt(r.finished) + '</strong></td>' +
+      '<td style="text-align:right">' + U.fmt(Math.max(0, r.given - r.finished)) + '</td>' +
+      '<td style="min-width:110px">' + bar(r.finished, r.given) + '</td></tr>').join('') : empty('Belum ada distribusi produksi tanggal ini.', 5);
+    const borongRows = w.borong.length ? w.borong.map(r =>
+      '<tr><td>' + U.esc(r.admin) + '</td><td>' + (r.worker ? U.esc(r.worker) : '-') + '</td>' +
+      '<td>' + U.esc(r.employee) + '</td><td>' + U.badge(r.type) + '</td>' +
+      '<td style="text-align:right">' + U.fmt(r.target) + '</td>' +
+      '<td style="text-align:right"><strong>' + U.fmt(r.done) + '</strong></td>' +
+      '<td style="min-width:110px">' + bar(r.done, r.target) + '</td>' +
+      '<td style="text-align:right">' + U.rp(r.wage) + '</td></tr>').join('') : empty('Belum ada tugas borong tanggal ini.', 8);
+    return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>📊 Pengawasan Harian Produksi & Pemborong</h3>' +
+      '<input type="date" id="monitorDate" value="' + U.esc(d) + '" title="Tanggal pengawasan"></div><div class="card-body">' +
+      '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<div><div style="color:var(--muted);font-size:11px">Diberikan ke pengrajin</div><strong style="font-size:17px">' + U.fmt(w.given) + ' pcs</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Selesai pengrajin</div><strong style="font-size:17px">' + U.fmt(w.finished) + ' pcs</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Target borong</div><strong style="font-size:17px">' + U.fmt(w.target) + ' pcs</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Selesai borong</div><strong style="font-size:17px">' + U.fmt(w.done) + ' pcs</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Upah borong</div><strong style="font-size:17px">' + U.rp(w.wage) + '</strong></div>' +
+      '</div><div class="grid grid-2">' +
+      '<div><div class="section-title">Produksi — Pengrajin</div><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Diberikan</th><th>Selesai</th><th>Sisa</th><th>Progres</th></tr></thead><tbody>' + prodRows + '</tbody></table></div></div>' +
+      '<div><div class="section-title">Borong — Amplas / Packing</div><div style="overflow:auto"><table><thead><tr><th>Admin</th><th>Karyawan</th><th>Pemborong</th><th>Jenis</th><th>Target</th><th>Selesai</th><th>Progres</th><th>Upah</th></tr></thead><tbody>' + borongRows + '</tbody></table></div></div>' +
+      '</div></div></div>';
+  }
+
+  const borong = {
+    render() {
+      const names = borongNames();
+      if (!state.slipBorongEmployee && names.length) state.slipBorongEmployee = names[0];
+      if (!state.slipBorongWeek) state.slipBorongWeek = weekStart(U.today());
+      let rows = DB.all('borong').filter(b =>
+        (!state.borongFrom || b.date >= state.borongFrom) && (!state.borongTo || b.date <= state.borongTo));
+      rows = filterRows(rows, state.borongQ, ['employee', 'handledByName', 'workerName', 'date', 'type', 'notes']);
+      if (state.borongEmployee) rows = rows.filter(b => b.employee === state.borongEmployee);
+      if (state.borongAdmin) rows = rows.filter(b => b.handledById === state.borongAdmin);
+      if (state.borongType) rows = rows.filter(b => b.type === state.borongType);
+      rows.sort((a, b) => b.date.localeCompare(a.date));
+
+      const today = DB.borongSummary(U.today());
+      const week = DB.borongWeek(state.slipBorongEmployee, state.slipBorongWeek);
+      const extra = U.num(state.slipBorongExtra);
+      const nameOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipBorongEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const filterNames = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.borongEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const filterAdmins = adminOpts().map(a => '<option value="' + a.value + '"' + (state.borongAdmin === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('');
+      const canEdit = can('borong.update') || can('payroll.edit');
+      const canCreate = can('borong.create') || can('payroll.edit');
+      const canAssign = can('borong.assign');
+
+      return UI.pageHead('Tugas & Gaji Borong Amplas / Packing', 'Admin produksi menugaskan harian; owner memantau target, realisasi, dan upah',
+        (canAssign ? '<button class="btn btn-primary" data-act="assignBorong">+ Tugaskan Borong Harian</button>' : '') +
+        (canCreate ? '<button class="btn" data-act="addBorong">+ Catat Gaji</button>' : '') +
+        '<button class="btn" data-act="printBorong">🖨️ Cetak Slip Borong</button>') +
+        '<div class="grid grid-stats">' +
+        UI.statCard({ label: 'Selesai / Target', value: U.fmt(today.done) + ' / ' + U.fmt(today.target), sub: 'pcs hari ini', icon: '✅' }) +
+        UI.statCard({ label: 'Total Upah Borong', value: U.rp(today.total), sub: U.dateID(U.today()), icon: '💰' }) +
+        UI.statCard({ label: 'Amplas', value: U.rp(today.amplas), sub: 'hari ini', icon: '🪵' }) +
+        UI.statCard({ label: 'Packing', value: U.rp(today.packing), sub: 'hari ini', icon: '📦' }) +
+        '</div><br>' + workMonitorHtml() + '<br>' +
+        '<div class="card"><div class="card-head"><h3>Tugas & Catatan Borong</h3><span style="display:flex;gap:8px">' +
+        '<button class="btn btn-sm" data-act="borongExcel">⬇ Excel</button><button class="btn btn-sm" data-act="borongPdf">⬇ PDF</button></span></div><div class="card-body">' +
+        '<div class="toolbar"><input id="borongQ" placeholder="Cari admin / karyawan / pemborong..." value="' + U.esc(state.borongQ) + '">' +
+        '<input type="date" id="borongFrom" value="' + U.esc(state.borongFrom) + '">' +
+        '<input type="date" id="borongTo" value="' + U.esc(state.borongTo) + '">' +
+        '<select id="borongAdmin"><option value="">Semua admin</option>' + filterAdmins + '</select>' +
+        '<select id="borongEmployee"><option value="">Semua pemborong</option>' + filterNames + '</select>' +
+        '<select id="borongType"><option value="">Semua jenis</option>' + ['Amplas', 'Packing'].map(x => '<option' + (state.borongType === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>' +
+        '<div class="spacer"></div><strong>Total: ' + U.rp(U.sum(rows, DB.borongTotal)) + '</strong></div>' +
+        UI.table({
+          columns: [
+            { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Admin yang Menangani', render: r => U.esc(r.handledByName || adminName(r.handledById)) },
+            { label: 'Karyawan yang Dipegang', render: r => U.esc(r.workerName || '-') },
+            { label: 'Nama Pemborong', key: 'employee' },
+            { label: 'Jenis', render: r => U.badge(r.type) },
+            { label: 'Barang (selesai / target)', render: r => (r.items || []).map(it => U.esc(it.name) + ' × ' + U.fmt(it.qty) + ' / ' + U.fmt(DB.borongItemTarget(it))).join('<br>') || '-' },
+            { label: 'Upah Borong', align: 'right', render: r => U.rp(U.sum(r.items || [], it => U.num(it.qty) * U.num(it.rate))) },
+            { label: 'Lembur', align: 'right', render: r => U.rp(U.sum(r.items || [], it => U.num(it.overtime)) + U.num(r.overtimeExtra)) },
+            { label: 'Total', align: 'right', render: r => '<strong>' + U.rp(DB.borongTotal(r)) + '</strong>' },
+            { label: 'Catatan', key: 'notes' }
+          ], rows,
+          actions: canEdit ? [{ label: 'Edit', act: 'editBorong' }, { label: 'Hapus', act: 'delBorong', cls: 'danger' }] : [],
+          empty: 'Belum ada tugas borong. Klik "+ Tugaskan Borong Harian".'
+        }) + '</div></div><br>' +
+        '<div class="card"><div class="card-head"><h3>🧾 Slip Gaji Borong per Orang</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' — ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
+        '<div class="form-grid">' +
+        '<div class="field"><label>Orang</label><select id="slipBorongEmployee">' + nameOpts + '</select></div>' +
+        '<div class="field"><label>Mulai Pekan (Senin)</label><input type="date" id="slipBorongWeek" value="' + U.esc(state.slipBorongWeek) + '"></div>' +
+        '<div class="field"><label>Tambahan Lembur Lainnya (Rp)</label><input type="number" id="slipBorongExtra" min="0" step="1000" value="' + extra + '"></div>' +
+        '</div><div style="margin-top:14px">' + UI.table({
+          columns: [
+            { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Jenis', key: 'type' },
+            { label: 'SKU', key: 'sku' },
+            { label: 'Barang', key: 'name' },
+            { label: 'Selesai', align: 'right', render: r => U.fmt(r.qty) },
+            { label: 'Tarif', align: 'right', render: r => U.rp(r.rate) },
+            { label: 'Upah', align: 'right', render: r => U.rp(U.num(r.qty) * U.num(r.rate)) },
+            { label: 'Lembur', align: 'right', render: r => U.rp(r.overtime) },
+            { label: 'Jumlah', align: 'right', render: r => '<strong>' + U.rp(DB.borongItemTotal(r)) + '</strong>' }
+          ], rows: week.items, empty: 'Tidak ada borong pada pekan ini.'
+        }) + '</div>' +
+        '<div id="borongSlipTotals" style="margin-top:14px">' + borong.totalsHtml(week, extra) + '</div>' +
+        '</div></div>';
+    },
+    totalsHtml(week, extra) {
+      const line = (label, value, bold) => '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)' + (bold ? ';font-weight:bold;font-size:16px;border-bottom:none' : '') + '"><span>' + label + '</span><span>' + U.rp(value) + '</span></div>';
+      return '<div style="max-width:380px;margin-left:auto">' +
+        line('Upah Borong', week.basic) +
+        line('Lembur per Item', U.sum(week.items, it => U.num(it.overtime))) +
+        line('Tambahan Lembur', extra) +
+        line('TOTAL GAJI BORONG', week.subtotal + extra, true) + '</div>';
+    },
+    bind(root) {
+      const refresh = () => { App.refresh(); const el = U.$('#borongQ'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
+      U.$('#borongQ', root).addEventListener('input', e => { state.borongQ = e.target.value; refresh(); });
+      ['#borongFrom:borongFrom', '#borongTo:borongTo', '#borongAdmin:borongAdmin', '#borongEmployee:borongEmployee', '#borongType:borongType',
+        '#monitorDate:monitorDate', '#slipBorongEmployee:slipBorongEmployee', '#slipBorongWeek:slipBorongWeek'].forEach(pair => {
+        const [sel, key] = pair.split(':');
+        const el = U.$(sel, root); if (el) el.addEventListener('change', e => { state[key] = e.target.value; App.refresh(); });
+      });
+      const week = DB.borongWeek(state.slipBorongEmployee, state.slipBorongWeek);
+      const recalc = () => {
+        const extra = U.num(U.$('#slipBorongExtra', root)?.value);
+        state.slipBorongExtra = extra;
+        const el = U.$('#borongSlipTotals', root);
+        if (el) el.innerHTML = borong.totalsHtml(week, extra);
+      };
+      const extraEl = U.$('#slipBorongExtra', root); if (extraEl) extraEl.addEventListener('input', recalc);
+      recalc();
+
+      U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
+        const act = b.dataset.act;
+        const canEditRow = can('borong.update') || can('payroll.edit');
+        if (act === 'assignBorong') { if (can('borong.assign')) borongForm(null, 'assign'); }
+        if (act === 'addBorong') { if (can('borong.create') || can('payroll.edit')) borongForm(null); }
+        if (act === 'editBorong') { const x = DB.get('borong', b.dataset.id); if (x && canEditRow) borongForm(x); }
+        if (act === 'delBorong') {
+          const x = DB.get('borong', b.dataset.id);
+          if (x && canEditRow) UI.confirm('Hapus catatan borong ' + x.employee + ' tanggal ' + U.dateID(x.date) + '?', () => {
+            DB.remove('borong', x.id); UI.toast('Dihapus', 'success'); App.refresh();
+          }, true);
+        }
+        if (act === 'printBorong') printBorongSlip(DB.borongWeek(state.slipBorongEmployee, state.slipBorongWeek), U.num(state.slipBorongExtra));
+        if (act === 'borongExcel' || act === 'borongPdf') {
+          const header = ['Tanggal', 'Admin yang Menangani', 'Karyawan yang Dipegang', 'Nama Pemborong', 'Jenis', 'SKU', 'Produk', 'Target', 'Selesai', 'Tarif', 'Lembur Item', 'Upah', 'Tambahan Lembur', 'Total', 'Catatan'];
+          const body = [];
+          DB.all('borong').sort((a, b) => b.date.localeCompare(a.date)).forEach(x => {
+            const admin = x.handledByName || adminName(x.handledById);
+            if (!(x.items || []).length) body.push([U.dateID(x.date), admin, x.workerName || '', x.employee, x.type, '', '', '', '', '', '', '', x.overtimeExtra || 0, DB.borongTotal(x), x.notes || '']);
+            (x.items || []).forEach(it => body.push([
+              U.dateID(x.date), admin, x.workerName || '', x.employee, x.type, it.sku, it.name, DB.borongItemTarget(it), it.qty, it.rate, it.overtime || 0,
+              U.num(it.qty) * U.num(it.rate), x.overtimeExtra || 0, DB.borongTotal(x), x.notes || ''
+            ]));
+          });
+          const rows = [header].concat(body);
+          if (act === 'borongExcel') U.exportExcel('laporan-gaji-borong', rows); else U.exportPDF('Laporan Gaji Borong', rows);
         }
       }));
     }
@@ -1319,5 +1864,5 @@ Object.assign(window.Views, (function () {
   };
 
   notifications.alerts = alerts;
-  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll, import: importView };
+  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll, borong, import: importView };
 })());
