@@ -7,7 +7,7 @@ window.Views = (function () {
   const pOf = id => DB.get('products', id) || {};
   const can = p => DB.can(p);
 
-  const state = { productSearch: '', productCat: '', productStatus: '', inSearch: '', inDate: '', outSearch: '', outType: '', outDate: '', artisanSearch: '', artisanActive: '' };
+  const state = { productSearch: '', productCat: '', productStatus: '', inSearch: '', inDate: '', inSelected: [], outSearch: '', outType: '', outDate: '', outSelected: [], artisanSearch: '', artisanActive: '' };
   const OUT_TYPES = ['Customer', 'Borong Obat', 'Servis', 'Pinjaman Sampel', 'Rusak/Afkir'];
   const RETURNABLE = ['Borong Obat', 'Servis', 'Pinjaman Sampel'];
 
@@ -15,6 +15,59 @@ window.Views = (function () {
     if (!q) return rows;
     const s = q.toLowerCase();
     return rows.filter(r => fields.some(f => String(r[f] || '').toLowerCase().includes(s)));
+  }
+
+  /* ================= TANDAI & HAPUS MASSAL ================= */
+  const selKey = name => name === 'inbound' ? 'inSelected' : 'outSelected';
+  function selectable(name, rows) {
+    const key = selKey(name);
+    const ids = state[key] || (state[key] = []);
+    const allChecked = rows.length > 0 && rows.every(r => ids.includes(r.id));
+    return {
+      header: '<input type="checkbox" data-select-all="' + name + '"' + (allChecked ? ' checked' : '') + ' title="Tandai semua baris yang terlihat">',
+      cell: r => '<input type="checkbox" data-select="' + name + '" data-id="' + U.esc(r.id) + '"' + (ids.includes(r.id) ? ' checked' : '') + '>'
+    };
+  }
+  function syncBulk(root, name) {
+    const n = (state[selKey(name)] || []).length;
+    const btn = U.$('[data-act="deleteSelected"][data-bulk="' + name + '"]', root);
+    if (btn) { btn.disabled = n === 0; btn.textContent = 'Hapus Terpilih (' + n + ')'; }
+    const all = U.$('[data-select-all="' + name + '"]', root);
+    if (all) {
+      const boxes = U.$$('[data-select="' + name + '"]', root);
+      all.checked = boxes.length > 0 && boxes.every(b => b.checked);
+    }
+  }
+  function bindSelect(root, name) {
+    const key = selKey(name);
+    U.$$('[data-select="' + name + '"]', root).forEach(cb => cb.addEventListener('change', () => {
+      const set = new Set(state[key] || []);
+      if (cb.checked) set.add(cb.dataset.id); else set.delete(cb.dataset.id);
+      state[key] = [...set];
+      syncBulk(root, name);
+    }));
+    const all = U.$('[data-select-all="' + name + '"]', root);
+    if (all) all.addEventListener('change', () => {
+      const set = new Set(state[key] || []);
+      U.$$('[data-select="' + name + '"]', root).forEach(cb => {
+        cb.checked = all.checked;
+        if (all.checked) set.add(cb.dataset.id); else set.delete(cb.dataset.id);
+      });
+      state[key] = [...set];
+      syncBulk(root, name);
+    });
+    syncBulk(root, name);
+  }
+  function bulkDelete(name, ids) {
+    const ids2 = ids.filter(id => !!DB.get(name, id));
+    if (!ids2.length) return;
+    const label = name === 'inbound' ? 'barang masuk' : 'barang keluar';
+    UI.confirm('Hapus ' + ids2.length + ' transaksi ' + label + ' sekaligus? Stok akan disesuaikan otomatis.', () => {
+      DB.removeMany(name, ids2);
+      state[selKey(name)] = [];
+      UI.toast(ids2.length + ' transaksi dihapus', 'success');
+      App.refresh();
+    }, true);
   }
 
   /* ================= DASHBOARD ================= */
@@ -330,14 +383,17 @@ window.Views = (function () {
       rows = filterRows(rows, state.inSearch, ['sku', 'productName', 'supplier', 'receiver', 'notes', 'date']);
       if (state.inDate) rows = rows.filter(x => x.date === state.inDate);
       rows.sort((a, b) => b.date.localeCompare(a.date));
+      const pick = selectable('inbound', rows);
       return UI.pageHead('Barang Masuk (Inbound)', 'Pencatatan semua barang yang diterima perusahaan',
         (can('inbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Masuk</button>' : '') +
+        (can('inbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="inbound" disabled>Hapus Terpilih (0)</button>' : '') +
         (can('inbound.view') ? '<button class="btn" data-act="excel">⬇ Excel</button><button class="btn" data-act="pdf">⬇ PDF</button>' : '')) +
         '<div class="toolbar"><input id="inSearch" placeholder="Cari produk / supplier / petugas..." value="' + U.esc(state.inSearch) + '">' +
         '<input type="date" id="inDate" value="' + U.esc(state.inDate) + '"><div class="spacer"></div>' +
         '<strong>Total masuk: ' + U.fmt(U.sum(rows, r => r.qty)) + ' pcs</strong></div>' +
         '<div class="card"><div class="card-body">' + UI.table({
           columns: [
+            ...(can('inbound.delete') ? [{ label: 'Tandai', htmlLabel: pick.header, render: pick.cell }] : []),
             { label: 'Tanggal', render: r => U.dateID(r.date) },
             { label: 'Supplier', key: 'supplier' },
             { label: 'SKU', key: 'sku' },
@@ -352,13 +408,15 @@ window.Views = (function () {
         }) + '</div></div>';
     },
     bind(root) {
-      U.$('#inSearch', root).addEventListener('input', e => { state.inSearch = e.target.value; App.refresh(); U.$('#inSearch').focus(); });
-      U.$('#inDate', root).addEventListener('change', e => { state.inDate = e.target.value; App.refresh(); });
+      U.$('#inSearch', root).addEventListener('input', e => { state.inSearch = e.target.value; state.inSelected = []; App.refresh(); U.$('#inSearch').focus(); });
+      U.$('#inDate', root).addEventListener('change', e => { state.inDate = e.target.value; state.inSelected = []; App.refresh(); });
+      bindSelect(root, 'inbound');
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
         if (act === 'add') { if (DB.can('inbound.create')) inboundForm(null); }
         if (act === 'edit') { const x = DB.get('inbound', b.dataset.id); if (x) inboundForm(x); }
         if (act === 'delete') { const x = DB.get('inbound', b.dataset.id); if (x) UI.confirm('Hapus transaksi masuk ' + x.sku + '? Stok akan dikurangi otomatis.', () => { DB.remove('inbound', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true); }
+        if (act === 'deleteSelected') bulkDelete('inbound', state.inSelected || []);
         if (act === 'excel' || act === 'pdf') {
           const rows = [['Tanggal', 'Supplier', 'SKU', 'Produk', 'Qty', 'Kondisi', 'Petugas', 'Keterangan']]
             .concat(DB.all('inbound').sort((a, b) => b.date.localeCompare(a.date)).map(x => [U.dateID(x.date), x.supplier, x.sku, x.productName, x.qty, x.condition, x.receiver, x.notes]));
@@ -404,8 +462,10 @@ window.Views = (function () {
       if (state.outType) rows = rows.filter(x => x.type === state.outType);
       if (state.outDate) rows = rows.filter(x => x.date === state.outDate);
       rows.sort((a, b) => b.date.localeCompare(a.date));
+      const pick = selectable('outbound', rows);
       return UI.pageHead('Barang Keluar (Outbound)', 'Customer, borong obat, servis, pinjaman sampel pengrajin, dan afkir — dicatat tim gudang',
         (can('outbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Keluar</button>' : '') +
+        (can('outbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="outbound" disabled>Hapus Terpilih (0)</button>' : '') +
         '<button class="btn" data-act="excel">⬇ Excel</button><button class="btn" data-act="pdf">⬇ PDF</button>') +
         '<div class="toolbar"><input id="outSearch" placeholder="Cari produk / tujuan / no SJ..." value="' + U.esc(state.outSearch) + '">' +
         '<select id="outType"><option value="">Semua jenis</option>' + OUT_TYPES.map(t => '<option' + (state.outType === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
@@ -413,6 +473,7 @@ window.Views = (function () {
         '<strong>Total keluar: ' + U.fmt(U.sum(rows, r => r.qty)) + ' pcs</strong></div>' +
         '<div class="card"><div class="card-body">' + UI.table({
           columns: [
+            ...(can('outbound.delete') ? [{ label: 'Tandai', htmlLabel: pick.header, render: pick.cell }] : []),
             { label: 'Tanggal', render: r => U.dateID(r.date) },
             { label: 'Jenis', render: r => U.badge(r.type) },
             { label: 'SKU', key: 'sku' },
@@ -429,9 +490,10 @@ window.Views = (function () {
         }) + '</div></div>';
     },
     bind(root) {
-      U.$('#outSearch', root).addEventListener('input', e => { state.outSearch = e.target.value; App.refresh(); U.$('#outSearch').focus(); });
-      U.$('#outType', root).addEventListener('change', e => { state.outType = e.target.value; App.refresh(); });
-      U.$('#outDate', root).addEventListener('change', e => { state.outDate = e.target.value; App.refresh(); });
+      U.$('#outSearch', root).addEventListener('input', e => { state.outSearch = e.target.value; state.outSelected = []; App.refresh(); U.$('#outSearch').focus(); });
+      U.$('#outType', root).addEventListener('change', e => { state.outType = e.target.value; state.outSelected = []; App.refresh(); });
+      U.$('#outDate', root).addEventListener('change', e => { state.outDate = e.target.value; state.outSelected = []; App.refresh(); });
+      bindSelect(root, 'outbound');
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
         if (act === 'add') { if (DB.can('outbound.create')) window.openOutboundForm(); }
@@ -453,6 +515,7 @@ window.Views = (function () {
           });
         }
         if (act === 'delete') { const x = DB.get('outbound', b.dataset.id); if (x) UI.confirm('Hapus transaksi keluar ini? Stok akan dikembalikan.', () => { DB.remove('outbound', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true); }
+        if (act === 'deleteSelected') bulkDelete('outbound', state.outSelected || []);
         if (act === 'returnOut') {
           const x = DB.get('outbound', b.dataset.id);
           if (x && RETURNABLE.includes(x.type) && window.openOtherReturnForm) window.openOtherReturnForm(x.type, null, x);

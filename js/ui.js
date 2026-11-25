@@ -133,7 +133,7 @@ window.UI = (function () {
     const rows = opts.rows || [];
     const actions = opts.actions || [];
     if (!rows.length) return '<div class="empty"><span class="empty-icon">📭</span>' + U.esc(opts.empty || 'Belum ada data.') + '</div>';
-    const head = cols.map(c => '<th class="' + (c.align === 'right' ? 'num' : '') + '">' + U.esc(c.label) + '</th>').join('') +
+    const head = cols.map(c => '<th class="' + (c.align === 'right' ? 'num' : '') + '">' + (c.htmlLabel || U.esc(c.label)) + '</th>').join('') +
       (actions.length ? '<th>Aksi</th>' : '');
     const body = rows.map(r => '<tr>' + cols.map(c =>
       '<td class="' + (c.align === 'right' ? 'num' : '') + '">' + (c.render ? c.render(r) : U.esc(r[c.key] ?? '-')) + '</td>'

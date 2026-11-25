@@ -547,6 +547,12 @@ window.DB = (function () {
     db[name] = db[name].filter(x => x.id !== id); save();
     if (isSupabase()) queue(() => sb.from(name).delete().eq('id', id), 'hapus ' + name);
   }
+  function removeMany(name, ids) {
+    const db = load();
+    const set = new Set(ids);
+    db[name] = db[name].filter(x => !set.has(x.id)); save();
+    if (isSupabase() && ids.length) queue(() => sb.from(name).delete().in('id', ids), 'hapus ' + ids.length + ' ' + name);
+  }
 
   /* ---------- Perhitungan stok otomatis ---------- */
   const sumWhere = (arr, pred, field) => U.sum(arr.filter(pred), x => x[field]);
@@ -828,7 +834,7 @@ window.DB = (function () {
   }
 
   return {
-    KEY, TABLES, DEFAULT_CATEGORIES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove,
+    KEY, TABLES, DEFAULT_CATEGORIES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
