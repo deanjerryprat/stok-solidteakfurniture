@@ -32,21 +32,23 @@ Jalankan **berurutan**, satu file per query, klik **Run** tiap selesai:
 | No | File SQL | Fungsi | Kapan penting |
 |----|----------|--------|---------------|
 | 1 | `supabase/fix-auth.sql` | Memperbaiki fungsi login `authenticate()` | Error `function digest(text, unknown) does not exist` |
-| 2 | `supabase/fix-permission.sql` | GRANT + RLS policy, termasuk tabel `borong` | Error `permission denied for table ...` |
+| 2 | `supabase/fix-permission.sql` | GRANT + RLS policy, termasuk tabel `borong` dan `boxes` | Error `permission denied for table ...` |
 | 3 | `supabase/add-wages.sql` | Tabel `wages` + kolom `position` + 10 data contoh | Tabel gaji belum ada |
 | 4 | `supabase/add-borong.sql` | Tabel `borong`, kolom `price`, `rateAmplas`, `ratePacking` | Error `404 /rest/v1/borong` |
 | 5 | `supabase/add-product-price.sql` | Kolom `price` saja | Hanya jika `add-borong.sql` pernah dijalankan sebelum kolom `price` ditambahkan |
-| 6 | **`supabase/add-online-updates.sql`** | **WAJIB.** Menambah kolom baru: `handledById`, `handledByName`, `workerName`, `position`, `source`, `partyName`, `inboundId` + policy borong | **Selalu jalankan**, karena field baru pembaruan terakhir belum ada di project lama |
-| 7 | `supabase/update-passwords.sql` | Mengganti password bawaan 5 akun ke password baru | Login online masih menolak password baru |
+| 6 | **`supabase/add-boxes.sql`** | **WAJIB.** Membuat tabel `boxes` untuk menu **Stok Box & Kubikasi**, termasuk relasi `productId`/`productSku`/`productName` | Tanpa ini, menu box online error `404 /rest/v1/boxes` |
+| 7 | **`supabase/add-online-updates.sql`** | **WAJIB.** Menambah kolom baru: `handledById`, `handledByName`, `workerName`, `position`, `source`, `partyName`, `inboundId`, kolom box + policy RLS | **Selalu jalankan**, karena field baru pembaruan terakhir belum ada di project lama |
+| 8 | `supabase/update-passwords.sql` | Mengganti password bawaan 5 akun ke password baru | Login online masih menolak password baru |
 
-> Urutan penting: `add-online-updates.sql` dijalankan **setelah** `add-borong.sql` dan `add-wages.sql`. Jika tabel belum ada, script ini akan gagal.
+> Urutan penting: jalankan `add-boxes.sql` **sebelum** `add-online-updates.sql`, karena script terakhir menambah kolom box dan policy untuk tabel `boxes`. `add-online-updates.sql` juga tetap harus setelah `add-borong.sql` dan `add-wages.sql`.
 
 ### 1B. Untuk project BARU (bersih)
 
 Cukup jalankan:
 
 1. `supabase/schema.sql` — sudah memuat semua tabel, kolom terbaru, policy, fungsi login, dan akun bawaan dengan password baru.
-2. `supabase/add-online-updates.sql` — opsional, sebagai verifikasi kolom (aman dijalankan ulang).
+2. `supabase/add-boxes.sql` — opsional untuk project baru karena `schema.sql` sudah memuat tabel `boxes`; aman dijalankan ulang.
+3. `supabase/add-online-updates.sql` — opsional, sebagai verifikasi kolom (aman dijalankan ulang).
 
 Tidak perlu menjalankan `update-passwords.sql` pada project baru karena `schema.sql` sudah memakai password baru.
 
@@ -58,7 +60,8 @@ Setelah semua script dijalankan, jalankan query ini di SQL Editor:
 select 'users' t, count(*) from public.users
 union all select 'products', count(*) from public.products
 union all select 'wages', count(*) from public.wages
-union all select 'borong', count(*) from public.borong;
+union all select 'borong', count(*) from public.borong
+union all select 'boxes', count(*) from public.boxes;
 ```
 
 Kemudian uji login bawaan (harus mengembalikan **5 baris**):
@@ -84,6 +87,7 @@ Terakhir, cek kolom baru dengan menjalankan isi `supabase/add-online-updates.sql
 - `wages`: `position`
 - `returns`: `source`, `partyName`
 - `qc`: `inboundId`
+- `boxes`: `productId`, `productSku`, `productName`, `code`, `sizeDetail`, `volumeM3`, `qty`, `minQty`
 
 ### 1D. Tabel error → solusi
 
@@ -95,6 +99,7 @@ Terakhir, cek kolom baru dengan menjalankan isi `supabase/add-online-updates.sql
 | `400` / `column position does not exist` di aplikasi | Kolom jabatan belum ada di database | Jalankan `add-online-updates.sql` |
 | `400` / `column price does not exist` | Kolom harga belum ada | Jalankan `add-product-price.sql` |
 | `400` / `column source does not exist` | Kolom barang kembali belum ada | Jalankan `add-online-updates.sql` |
+| `404` pada `/rest/v1/boxes?select=*` | Tabel box belum ada | Jalankan `add-boxes.sql` |
 | `permission denied for table users` | GRANT/RLS belum benar | Jalankan `fix-permission.sql` |
 | `function digest(text, unknown) does not exist` | Fungsi login lama | Jalankan `fix-auth.sql` |
 | Username/password benar tapi login ditolak | Password server belum diubah | Jalankan `update-passwords.sql` |
@@ -206,6 +211,7 @@ git push -u origin main
    - Tombol **🧹 Tugas Borong Harian** → form ada admin, karyawan, pemborong, Target/Selesai.
    - Menu **Gaji Karyawan** → tabel ada kolom **Jabatan**.
    - Menu **Barang Kembali & QC** → tab **Kembali Borong / Sampel** dan aksi **Buat Masuk** tersedia.
+   - Menu **Stok Box & Kubikasi** → bisa memilih barang dari Database Produk, mengisi ukuran sendiri, dan melihat total kubikasi.
 5. Buka **DevTools → Console** (F12). Tidak boleh ada error `404`, `400`, atau `permission denied`.
 
 ---
@@ -216,6 +222,7 @@ git push -u origin main
 - **Admin Produksi** (`PRODUKSI`): mengatur barang yang diamplas/dipacking per hari, target & realisasi, distribusi, dan SPK.
 - **Manager / Owner**: melihat **Pengawasan Harian** berapa barang selesai per orang per hari; tidak perlu input transaksi.
 - **Barang kembali** belum menambah stok gudang sampai lolos QC dan dibuatkan **barang masuk** lewat tombol **Buat Masuk**.
+- **Database Produk** tetap dipakai sebagai daftar barang yang akan dimuat ke dalam box; setiap box wajib memilih salah satu produk. Ukuran box diisi manual di menu **Stok Box & Kubikasi**; kubikasi bisa dihitung otomatis dari Panjang × Lebar × Tinggi (cm) atau diisi sendiri.
 
 ---
 

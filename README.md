@@ -55,7 +55,7 @@ Validasi otomatis: distribusi/pengiriman tidak boleh melebihi stok gudang; pener
 
 Folder ini sudah berisi file statis (`index.html`, `styles.css`, folder `js`). Tidak ada build step.
 
-> **Pembaruan online terbaru:** ikuti **`PANDUAN-ONLINE.md`** untuk urutan lengkap update Supabase (termasuk `add-online-updates.sql`) dan upload ke GitHub Pages.
+> **Pembaruan online terbaru:** ikuti **`PANDUAN-ONLINE.md`** untuk urutan lengkap update Supabase (termasuk `add-online-updates.sql` dan `add-boxes.sql`) dan upload ke GitHub Pages.
 
 **Opsi 1 — Netlify (paling mudah)**
 1. Daftar gratis di `netlify.com`.
@@ -202,6 +202,7 @@ supabase/add-wages.sql       tambah tabel wages ke project Supabase yang sudah a
 supabase/add-borong.sql      tambah tabel borong + kolom price/rateAmplas/ratePacking pada products
 supabase/add-product-price.sql  tambah kolom price saja (bila add-borong.sql sudah pernah dijalankan)
 supabase/add-online-updates.sql  WAJIB: kolom admin borong, jabatan gaji, sumber barang kembali, inboundId QC + policy borong
+supabase/add-boxes.sql          WAJIB: tabel boxes + relasi produk untuk menu Stok Box & Kubikasi
 supabase/update-passwords.sql  ganti password bawaan 5 akun di project Supabase yang sudah ada
 supabase/reset-data.sql         kosongkan semua data tanpa menghapus struktur tabel
 supabase/reset-all.sql          reset struktur penuh (tabel + fungsi login)
