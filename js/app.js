@@ -21,6 +21,7 @@ window.App = (function () {
       { key: 'payroll', label: 'Gaji Karyawan', icon: '💰', perm: 'payroll.view' }
     ]},
     { group: 'Laporan & Sistem', items: [
+      { key: 'import', label: 'Import Excel', icon: '⬆️', perm: 'import.view' },
       { key: 'reports', label: 'Laporan', icon: '📑', perm: 'reports.view' },
       { key: 'users', label: 'Pengguna', icon: '👤', perm: 'users.view' },
       { key: 'settings', label: 'Pengaturan', icon: '⚙️', perm: 'users.view' }

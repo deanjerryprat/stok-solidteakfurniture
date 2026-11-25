@@ -5,6 +5,7 @@ window.DB = (function () {
   const CONFIG_KEY = 'furniture_supabase_config';
   const MODE_KEY = 'furniture_db_mode';
   const DISABLE_KEY = 'furniture_supabase_disabled';
+  const BACKUP_KEY = 'furniture_backup_config';
   const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'users'];
   let cache = null;
   let mode = localStorage.getItem(MODE_KEY) || 'local';
@@ -201,6 +202,70 @@ window.DB = (function () {
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(cache)); }
     catch (e) { U.toast('Gagal menyimpan cache lokal (penyimpanan penuh)', 'error'); }
+    scheduleBackup();
+  }
+
+  /* ---------- Backup ke Google Sheet / Gmail via Apps Script ---------- */
+  let backupTimer = null;
+  function getBackupConfig() {
+    try { return JSON.parse(localStorage.getItem(BACKUP_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function saveBackupConfig(cfg) {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(cfg || {}));
+    return getBackupConfig();
+  }
+  async function pushBackup(silent) {
+    const cfg = getBackupConfig();
+    if (!cfg.url) throw new Error('Web App URL backup belum diisi di menu Pengaturan.');
+    const payload = {
+      token: cfg.token || '', email: cfg.email || '',
+      timestamp: new Date().toISOString(), app: 'Stok Solidteak Furniture',
+      tables: load()
+    };
+    let res = null, text = '', opaque = false;
+    try {
+      res = await fetch(cfg.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      });
+      text = await res.text();
+    } catch (e) {
+      // Beberapa browser memblokir pembacaan response lintas origin.
+      // Fallback: kirim tetap jalan (simple request), hasil dicek di Sheet/email.
+      try {
+        await fetch(cfg.url, {
+          method: 'POST', mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        opaque = true;
+      } catch (e2) {
+        throw new Error('Gagal menghubungi Google Apps Script: ' + e2.message + '. Cek URL dan koneksi internet.');
+      }
+    }
+    let out;
+    if (opaque) {
+      const rows = Object.keys(payload.tables).reduce((n, k) => n + (Array.isArray(payload.tables[k]) ? payload.tables[k].length : 0), 0);
+      out = { ok: true, rows: rows, tables: Object.keys(payload.tables).length, emailSent: null, opaque: true };
+    } else {
+      try { out = JSON.parse(text); }
+      catch (e) { throw new Error('Balasan backup tidak dikenali: ' + String(text || '').slice(0, 120)); }
+      if (!res.ok || out.ok === false) throw new Error(out.error || ('HTTP ' + res.status));
+    }
+    cfg.lastBackup = new Date().toISOString();
+    cfg.sheetUrl = out.sheetUrl || cfg.sheetUrl;
+    saveBackupConfig(cfg);
+    if (!silent) return out;
+    return out;
+  }
+  function scheduleBackup() {
+    const cfg = getBackupConfig();
+    if (!cfg.auto || !cfg.url) return;
+    clearTimeout(backupTimer);
+    backupTimer = setTimeout(() => { pushBackup(true).catch(() => {}); }, 20000);
   }
 
   /* ---------- Konfigurasi Supabase ---------- */
@@ -488,10 +553,10 @@ window.DB = (function () {
 
   const PERMS = {
     ADMIN: ['*'],
-    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.view', 'qc.*', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.view'],
-    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications', 'payroll.view'],
+    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.view', 'qc.*', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
+    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
     PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.*', 'qc.view', 'spk.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
-    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.*']
+    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
   };
   function can(perm) {
     const u = currentUser();
@@ -505,7 +570,7 @@ window.DB = (function () {
 
   return {
     KEY, TABLES, load, save, reset, replace, all, get, insert, update, remove,
-    getConfig, saveConfig, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
+    getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyDist, qtyReturn, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcRejected,
     stock, totals, payrollSummary, payrollWeek, wageTotal, artisanStats, distRemaining, validate,
     authenticate, currentUser, login, logout, can, hash, hashAsync, svgPhoto

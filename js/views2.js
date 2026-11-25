@@ -536,6 +536,7 @@ Object.assign(window.Views, (function () {
   const settings = {
     render() {
       const cfg = DB.getConfig() || {};
+      const bk = DB.getBackupConfig() || {};
       const online = DB.isSupabase();
       return UI.pageHead('Pengaturan Database', 'Hubungkan aplikasi ke Supabase (database bersama gratis)',
         online ? '<span class="badge badge-green">● MODE SUPABASE</span>' : '<span class="badge badge-yellow">● MODE LOKAL</span>') +
@@ -557,7 +558,25 @@ Object.assign(window.Views, (function () {
         '<li>Tempel keduanya di atas, lalu klik <strong>Aktifkan Supabase</strong>. Data contoh akan otomatis terunggah.</li>' +
         '<li>Deploy ulang folder aplikasi ke hosting gratis. Semua perangkat yang membuka link akan memakai database yang sama.</li>' +
         '</ol></div></div><br>' +
-        '<div class="notice error"><strong>Catatan keamanan:</strong> schema di atas memakai policy akses penuh untuk kemudahan internal/demo. Untuk pemakaian publik, sebaiknya aktifkan Supabase Auth dan ganti RLS policy dengan pemeriksaan <code>auth.uid()</code>. Akun demo (admin/admin123, dll.) dibuat oleh schema.sql dan diverifikasi lewat fungsi <code>authenticate()</code> di server.</div>';
+        '<div class="card"><div class="card-head"><h3>☁️ Backup ke Google Sheet + Gmail</h3>' +
+        (bk.lastBackup ? '<span class="badge badge-green">Terakhir: ' + U.dateTime(bk.lastBackup) + '</span>' : '<span class="badge badge-yellow">Belum pernah backup</span>') +
+        '</div><div class="card-body">' +
+        '<div class="notice">Supabase sudah menyimpan data bersama secara otomatis. Tambahan ini mengirim salinan seluruh tabel ke <strong>Google Sheet</strong>, menyimpan file JSON di <strong>Google Drive</strong>, dan mengirim email ke <strong>Gmail</strong>. Siapkan sekali lewat file <code>google-apps-script/Code.gs</code> (panduan ada di README).</div><br>' +
+        '<div class="form-grid">' +
+        '<div class="field full"><label>Web App URL (dari Deploy → Web app)</label><input id="bkUrl" placeholder="https://script.google.com/macros/s/.../exec" value="' + U.esc(bk.url || '') + '"></div>' +
+        '<div class="field"><label>Email Gmail penerima</label><input id="bkEmail" type="email" placeholder="nama@gmail.com" value="' + U.esc(bk.email || '') + '"></div>' +
+        '<div class="field"><label>Token rahasia (sama dengan Script Properties)</label><input id="bkToken" type="password" value="' + U.esc(bk.token || '') + '"></div>' +
+        '</div>' +
+        '<div style="margin-top:12px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bkAuto"' + (bk.auto ? ' checked' : '') + ' style="width:auto"> Backup otomatis 20 detik setelah ada perubahan data</label></div>' +
+        '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn" id="bkSave">💾 Simpan Pengaturan</button>' +
+        '<button class="btn btn-primary" id="bkNow">☁️ Backup Sekarang</button>' +
+        '<button class="btn" id="bkJson">⬇ Unduh Cadangan JSON</button>' +
+        (bk.sheetUrl ? '<a class="btn" href="' + U.esc(bk.sheetUrl) + '" target="_blank" rel="noopener">📊 Buka Google Sheet</a>' : '') +
+        '</div><div id="bkStatus" class="hint" style="margin-top:10px">' +
+        (bk.sheetUrl ? 'Sheet: ' + U.esc(bk.sheetUrl) : 'Belum ada Google Sheet tertaut.') + '</div>' +
+        '</div></div><br>' +
+        '<div class="notice error"><strong>Catatan keamanan:</strong> schema Supabase di atas memakai policy akses penuh untuk kemudahan internal/demo. Untuk pemakaian publik, sebaiknya aktifkan Supabase Auth dan ganti RLS policy dengan pemeriksaan <code>auth.uid()</code>. Akun demo (admin/admin123, dll.) dibuat oleh schema.sql dan diverifikasi lewat fungsi <code>authenticate()</code> di server. Untuk backup: siapa pun yang tahu Web App URL + token bisa menimpa sheet, jadi simpan token baik-baik.</div>';
     },
     bind(root) {
       const urlEl = U.$('#sbUrl', root), keyEl = U.$('#sbKey', root);
@@ -581,6 +600,46 @@ Object.assign(window.Views, (function () {
         UI.confirm('Kembali ke mode lokal? Data di Supabase tetap tersimpan, tetapi aplikasi akan memakai data di browser ini.', () => {
           DB.useLocal(); App.refresh();
         });
+      });
+
+      const bkForm = () => {
+        const old = DB.getBackupConfig() || {};
+        return {
+          url: U.$('#bkUrl', root).value.trim(),
+          email: U.$('#bkEmail', root).value.trim(),
+          token: U.$('#bkToken', root).value.trim(),
+          auto: U.$('#bkAuto', root).checked,
+          lastBackup: old.lastBackup, sheetUrl: old.sheetUrl
+        };
+      };
+      const bkSave = U.$('#bkSave', root);
+      if (bkSave) bkSave.addEventListener('click', () => {
+        DB.saveBackupConfig(bkForm());
+        UI.toast('Pengaturan backup disimpan', 'success');
+        App.refresh();
+      });
+      const bkNow = U.$('#bkNow', root);
+      if (bkNow) bkNow.addEventListener('click', async () => {
+        DB.saveBackupConfig(bkForm());
+        bkNow.disabled = true; bkNow.textContent = 'Mengirim...';
+        const status = U.$('#bkStatus', root);
+        if (status) status.textContent = 'Mengirim salinan data ke Google Sheet & Gmail...';
+        try {
+          const out = await DB.pushBackup();
+          UI.toast(out.opaque
+            ? 'Backup dikirim. Cek Google Sheet / email untuk konfirmasi.'
+            : 'Backup berhasil: ' + U.fmt(out.rows) + ' baris' + (out.emailSent ? ', email terkirim' : (out.emailSent === false ? ', email gagal: ' + (out.emailError || 'cek pengaturan') : '')), 'success');
+          App.refresh();
+        } catch (err) {
+          UI.toast(err.message, 'error');
+          if (status) status.textContent = 'Gagal: ' + err.message;
+          bkNow.disabled = false; bkNow.textContent = '☁️ Backup Sekarang';
+        }
+      });
+      const bkJson = U.$('#bkJson', root);
+      if (bkJson) bkJson.addEventListener('click', () => {
+        U.download('backup-stok-' + U.today() + '.json', JSON.stringify(DB.load(), null, 2), 'application/json');
+        UI.toast('Cadangan JSON diunduh', 'success');
       });
     }
   };
@@ -802,6 +861,463 @@ Object.assign(window.Views, (function () {
     }
   };
 
+  /* ================= IMPORT EXCEL / CSV ================= */
+  const impState = {
+    fileName: '', sheet: '', headerRow: 1, sheets: [], headers: [], rows: [],
+    mode: 'mutasi', mapping: {}, result: null, busy: false
+  };
+  let impWorkbook = null;
+
+  const impAliases = {
+    tanggal: ['tanggal', 'tgl', 'date', 'tanggaltransaksi', 'tanggalmasuk', 'tanggalkeluar'],
+    jenis: ['jenis', 'type', 'tipe', 'transaksi', 'mutasi', 'jenistransaksi', 'status'],
+    sku: ['sku', 'kode', 'kodeproduk', 'kdproduk', 'code', 'itemcode', 'kodebarang', 'no'],
+    nama: ['nama', 'namaproduk', 'product', 'productname', 'item', 'itemname', 'deskripsi', 'description', 'barang', 'namabarang'],
+    kategori: ['kategori', 'category', 'jenisbarang', 'group', 'kelompok'],
+    ukuran: ['ukuran', 'size', 'dimensi', 'dimension', 'spec'],
+    qty: ['qty', 'jumlah', 'quantity', 'jumlahbarang', 'pcs', 'unit', 'volume', 'jumlahmasuk', 'jumlahkeluar'],
+    supplier: ['supplier', 'penyuplai', 'vendor', 'dari', 'from', 'asal', 'namasupplier', 'supplierdari'],
+    tujuan: ['tujuan', 'destination', 'ke', 'to', 'customer', 'buyer', 'penerima', 'namacustomer', 'tujuanke'],
+    petugas: ['petugas', 'receiver', 'staff', 'pic', 'admin', 'operator', 'petugasgudang'],
+    kondisi: ['kondisi', 'condition', 'statusbarang', 'kualitas'],
+    suratJalan: ['suratjalan', 'nosuratjalan', 'sj', 'nosj', 'no Surat jalan'],
+    status: ['status', 'statusproduk', 'posisi'],
+    minStock: ['minstock', 'stokminimum', 'minimum', 'min'],
+    initial: ['stockawal', 'stokawal', 'saldoawal', 'awal', 'beginning'],
+    inTotal: ['masuk', 'totalmasuk', 'jumlahmasuk'],
+    outTotal: ['keluar', 'totalkeluar', 'jumlahkeluar'],
+    final: ['stockakhir', 'stokakhir', 'akhir', 'ending'],
+    keterangan: ['keterangan', 'catatan', 'notes', 'note', 'remark', 'memo']
+  };
+
+  const impModeFields = {
+    stok: [],
+    mutasi: ['tanggal', 'jenis', 'sku', 'nama', 'qty', 'supplier', 'tujuan', 'petugas', 'kondisi', 'suratJalan', 'kategori', 'ukuran', 'keterangan'],
+    inbound: ['tanggal', 'sku', 'nama', 'qty', 'supplier', 'petugas', 'kondisi', 'kategori', 'ukuran', 'keterangan'],
+    outbound: ['tanggal', 'sku', 'nama', 'qty', 'tujuan', 'petugas', 'suratJalan', 'kategori', 'ukuran', 'keterangan'],
+    products: ['sku', 'nama', 'kategori', 'ukuran', 'status', 'minStock', 'keterangan']
+  };
+  const impFieldLabel = {
+    tanggal: 'Tanggal', jenis: 'Jenis (Masuk/Keluar)', sku: 'SKU / Kode Produk', nama: 'Nama Produk',
+    qty: 'Jumlah / Qty', supplier: 'Supplier / Dari', tujuan: 'Tujuan / Customer', petugas: 'Petugas',
+    kondisi: 'Kondisi', suratJalan: 'No. Surat Jalan', kategori: 'Kategori', ukuran: 'Ukuran',
+    status: 'Status Produk', minStock: 'Stok Minimum', keterangan: 'Keterangan'
+  };
+
+  function impNorm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function impGuess(headers, field) {
+    const aliases = (impAliases[field] || []).map(impNorm);
+    return headers.find(h => aliases.includes(impNorm(h))) || '';
+  }
+  function impDate(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (v instanceof Date) return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+    if (typeof v === 'number') {
+      const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+      return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+    m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+    if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return y + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); }
+    const d = new Date(s);
+    return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function impVal(row, field) {
+    const key = impState.mapping[field];
+    return key ? (row[key] === undefined || row[key] === null ? '' : row[key]) : '';
+  }
+  function impParseSheet() {
+    if (!impWorkbook || !impState.sheet) return;
+    const ws = impWorkbook.Sheets[impState.sheet];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false, raw: true });
+    const hi = Math.max(0, U.num(impState.headerRow) - 1);
+    const headers = (aoa[hi] || []).map((h, i) => String(h || '').trim() || ('Kolom ' + (i + 1)));
+    impState.headers = headers;
+    impState.rows = aoa.slice(hi + 1).map(arr => {
+      const o = {}; headers.forEach((h, i) => o[h] = arr[i]); return o;
+    }).filter(r => Object.values(r).some(v => String(v || '').trim() !== ''));
+    impState.mapping = {};
+    impModeFields[impState.mode].forEach(f => { impState.mapping[f] = impGuess(headers, f); });
+    impState.result = null;
+  }
+
+  function impIsErr(v) {
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'number' && (v < -2000000000 || v > 2000000000)) return true;
+    const s = String(v).trim();
+    return /^#(N\/A|REF!|VALUE!|DIV\/0!|NAME\?|NUM!|NULL!)$/i.test(s) || /^-?2146826\d{3}$/.test(s);
+  }
+  function impVal2(row, map, field) {
+    const k = map[field];
+    return k ? (row[k] === undefined || row[k] === null ? '' : row[k]) : '';
+  }
+  function impMapHeaders(headers) {
+    const m = {};
+    Object.keys(impAliases).forEach(f => { m[f] = impGuess(headers, f); });
+    return m;
+  }
+  function impFindSheet(headerKeys) {
+    if (!impWorkbook || !window.XLSX) return null;
+    for (const name of impWorkbook.SheetNames) {
+      const ws = impWorkbook.Sheets[name];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false, raw: true });
+      for (let i = 0; i < Math.min(aoa.length, 12); i++) {
+        const norm = (aoa[i] || []).map(h => impNorm(h));
+        if (!headerKeys.every(k => norm.some(h => h.includes(k)))) continue;
+        const headers = (aoa[i] || []).map((h, j) => String(h || '').trim() || ('Kolom ' + (j + 1)));
+        const rows = aoa.slice(i + 1).map((arr, j) => {
+          const o = {}; headers.forEach((h, c) => o[h] = arr[c]);
+          o.__excelRow = i + j + 2;
+          return o;
+        }).filter(r => Object.keys(r).some(k => k !== '__excelRow' && !impIsErr(r[k]) && String(r[k] || '').trim() !== ''));
+        return { name, headers, rows, mapping: impMapHeaders(headers) };
+      }
+    }
+    return null;
+  }
+  function impWorkbookInfo() {
+    return [
+      ['Produk', ['kode', 'nama', 'stockawal']],
+      ['Barang masuk', ['tanggal', 'kode', 'jumlahmasuk']],
+      ['Barang keluar', ['tanggal', 'kode', 'jumlahkeluar']]
+    ].map(d => {
+      const info = impFindSheet(d[1]);
+      return { label: d[0], name: info ? info.name : '-', rows: info ? info.rows.length : 0 };
+    });
+  }
+
+  function impImportWorkbook() {
+    const res = { products: 0, saldoAwal: 0, inbound: 0, outbound: 0, flagged: 0, skipped: 0, errors: [] };
+    const pInfo = impFindSheet(['kode', 'nama', 'stockawal']);
+    const iInfo = impFindSheet(['tanggal', 'kode', 'jumlahmasuk']);
+    const oInfo = impFindSheet(['tanggal', 'kode', 'jumlahkeluar']);
+    if (!pInfo && !iInfo && !oInfo) { res.errors.push('Sheet DAFTAR PRODUK / PRODUK MASUK / PRODUK KELUAR tidak ditemukan.'); return res; }
+
+    const now = new Date().toISOString();
+    const byKey = {};
+    DB.all('products').forEach(p => { byKey[impNorm(p.sku)] = p; });
+    const ensureProduct = (sku, name, note) => {
+      const key = impNorm(sku);
+      if (!key) return null;
+      let p = byKey[key];
+      if (!p) {
+        p = DB.insert('products', {
+          sku: sku, name: name || sku, category: 'Lainnya', size: '', status: 'Gudang', minStock: 0,
+          photo: DB.svgPhoto('📦', '#f1f5f9'), notes: note || 'Diimpor dari Excel', createdAt: now
+        });
+        byKey[key] = p; res.products++;
+      }
+      return p;
+    };
+    const dup = (table, tag) => impState.skipDuplicate !== false && DB.all(table).some(x => x.notes === tag);
+
+    const dates = [];
+    [iInfo, oInfo].forEach(info => {
+      if (!info) return;
+      let last = '';
+      info.rows.forEach(r => {
+        const d = impDate(impVal2(r, info.mapping, 'tanggal'));
+        if (d) last = d;
+        if (last) dates.push(last);
+      });
+    });
+    dates.sort();
+    const baseDate = dates[0] || U.today();
+
+    if (pInfo) pInfo.rows.forEach(r => {
+      const rawSku = impVal2(r, pInfo.mapping, 'sku');
+      const sku = String(rawSku || '').trim();
+      if (!sku || impIsErr(rawSku)) { res.skipped++; return; }
+      const key = impNorm(sku);
+      const name = String(impVal2(r, pInfo.mapping, 'nama') || '').trim();
+      const initial = U.num(impVal2(r, pInfo.mapping, 'initial'));
+      let p = ensureProduct(sku, name, 'Diimpor dari DAFTAR PRODUK');
+      if (!p) return;
+      const patch = {};
+      if (p.sku !== sku) patch.sku = sku;
+      if (name && p.name !== name) patch.name = name;
+      if (!String(p.notes || '').includes('DAFTAR PRODUK')) patch.notes = 'Diimpor dari DAFTAR PRODUK';
+      if (Object.keys(patch).length) {
+        delete byKey[key];
+        p = DB.update('products', p.id, patch);
+        byKey[impNorm(p.sku)] = p;
+      }
+      if (initial <= 0) return;
+      const tag = 'IMPORT|SALDO_AWAL|' + impState.fileName + '|' + p.sku;
+      if (dup('inbound', tag)) { res.skipped++; return; }
+      DB.insert('inbound', {
+        date: baseDate, productId: p.id, sku: p.sku, productName: p.name, qty: initial,
+        supplier: 'SALDO AWAL', condition: 'Baik', receiver: '-', notes: tag, createdAt: now
+      });
+      res.saldoAwal++;
+    });
+
+    let check = null;
+    if (iInfo) {
+      let lastDate = '', lastSupplier = '';
+      iInfo.rows.forEach(r => {
+        const qty = U.num(impVal2(r, iInfo.mapping, 'qty'));
+        if (qty <= 0) return;
+        const d = impDate(impVal2(r, iInfo.mapping, 'tanggal'));
+        if (d) lastDate = d;
+        const sup = impVal2(r, iInfo.mapping, 'supplier');
+        if (String(sup || '').trim() && !impIsErr(sup)) lastSupplier = String(sup).trim();
+        const date = lastDate || U.today();
+        const supplier = lastSupplier || '-';
+        const rawSku = impVal2(r, iInfo.mapping, 'sku');
+        const rawName = impVal2(r, iInfo.mapping, 'nama');
+        const bad = impIsErr(rawSku) || impIsErr(rawName) || !String(rawSku || '').trim();
+        if (bad && !check) check = ensureProduct('CEK-SKU', 'SKU TIDAK DIKETAHUI (CEK EXCEL)', 'Perlu dicek: baris tanpa SKU / #N/A dari sheet PRODUK MASUK.');
+        const p = bad ? check : ensureProduct(String(rawSku).trim(), String(rawName || '').trim(), 'Diimpor dari PRODUK MASUK');
+        if (!p) { res.errors.push('Baris ' + r.__excelRow + ': produk tidak dibuat'); return; }
+        const tag = 'IMPORT|MASUK|' + impState.fileName + '|' + r.__excelRow + '|' + p.sku + '|' + qty;
+        if (dup('inbound', tag)) { res.skipped++; return; }
+        DB.insert('inbound', {
+          date, productId: p.id, sku: p.sku, productName: p.name, qty, supplier,
+          condition: 'Baik', receiver: '-',
+          notes: tag + (bad ? ' | PERLU DICEK: SKU #N/A / kosong' : ''), createdAt: now
+        });
+        res.inbound++;
+        if (bad) {
+          res.flagged++;
+          const fresh = DB.get('products', p.id) || p;
+          DB.update('products', p.id, {
+            notes: String((fresh.notes || '') + ' | Baris ' + r.__excelRow + ': qty ' + qty + ', supplier ' + supplier).slice(0, 2000)
+          });
+        }
+      });
+    }
+
+    if (oInfo) {
+      let lastDate = '';
+      oInfo.rows.forEach(r => {
+        const qty = U.num(impVal2(r, oInfo.mapping, 'qty'));
+        if (qty <= 0) return;
+        const d = impDate(impVal2(r, oInfo.mapping, 'tanggal'));
+        if (d) lastDate = d;
+        const rawSku = impVal2(r, oInfo.mapping, 'sku');
+        if (impIsErr(rawSku) || !String(rawSku || '').trim()) { res.skipped++; return; }
+        const p = ensureProduct(String(rawSku).trim(), String(impVal2(r, oInfo.mapping, 'nama') || '').trim(), 'Diimpor dari PRODUK KELUAR');
+        if (!p) { res.errors.push('Baris ' + r.__excelRow + ': produk tidak dibuat'); return; }
+        const tag = 'IMPORT|KELUAR|' + impState.fileName + '|' + r.__excelRow + '|' + p.sku + '|' + qty;
+        if (dup('outbound', tag)) { res.skipped++; return; }
+        DB.insert('outbound', {
+          date: lastDate || U.today(), type: 'Customer', productId: p.id, sku: p.sku, productName: p.name,
+          qty, destination: '-', artisanReceiver: '-', suratJalan: '-', staff: '-', notes: tag, createdAt: now
+        });
+        res.outbound++;
+      });
+    }
+    return res;
+  }
+
+  const importView = {
+    render() {
+      return UI.pageHead('Import Excel / CSV', 'Impor dataproduk, barang masuk, dan barang keluar dari file Excel Anda',
+        '<button class="btn" id="impTemplate">⬇ Unduh Template</button>') +
+        '<div id="importArea">' + this.area() + '</div>';
+    },
+    area() {
+      const s = impState;
+      if (!s.rows.length) {
+        return '<div class="card"><div class="card-head"><h3>1. Pilih File Excel</h3></div><div class="card-body">' +
+          '<div class="notice">Format didukung: <strong>.xlsx, .xls, .csv</strong>. Baris pertama sheet dianggap sebagai header (bisa diatur). Mapping kolom bisa diubah sebelum import.</div><br>' +
+          '<input type="file" id="impFile" accept=".xlsx,.xls,.csv,.ods">' +
+          '<p class="hint" style="margin-top:10px">Belum ada file dipilih. ' + (s.fileName ? 'Terakhir: ' + U.esc(s.fileName) : '') + '</p>' +
+          '</div></div>';
+      }
+      const sel = (field) => '<select data-imp-map="' + field + '"><option value="">— tidak ada —</option>' +
+        s.headers.map(h => '<option value="' + U.esc(h) + '"' + (s.mapping[field] === h ? ' selected' : '') + '>' + U.esc(h) + '</option>').join('') + '</select>';
+      const mapping = impModeFields[s.mode].map(f =>
+        '<div class="field"><label>' + impFieldLabel[f] + '</label>' + sel(f) + '</div>').join('');
+      const preview = s.rows.slice(0, 8).map(r => '<tr>' + s.headers.map(h =>
+        '<td>' + U.esc(typeof r[h] === 'string' ? r[h].slice(0, 40) : (r[h] instanceof Date ? U.dateID(impDate(r[h])) : r[h])) + '</td>').join('') + '</tr>').join('');
+      const result = s.result ? '<div class="notice ' + (s.result.errors.length ? 'error' : '') + '"><strong>Hasil import:</strong> ' +
+        'Produk baru: ' + s.result.products + ' · Saldo awal: ' + (s.result.saldoAwal || 0) +
+        ' · Barang masuk: ' + s.result.inbound + ' · Barang keluar: ' + s.result.outbound +
+        ' · Perlu dicek: ' + (s.result.flagged || 0) +
+        ' · Dilewati: ' + s.result.skipped + ' · Error: ' + s.result.errors.length +
+        (s.result.errors.length ? '<br>' + s.result.errors.slice(0, 5).map(U.esc).join('<br>') : '') + '</div><br>' : '';
+      const isStok = s.mode === 'stok';
+      const step3 = isStok
+        ? '<div class="card"><div class="card-head"><h3>3. Sheet yang terdeteksi</h3><span class="badge badge-green">Otomatis</span></div><div class="card-body">' +
+          impWorkbookInfo().map(x => '<div style="padding:6px 0;border-bottom:1px solid #e2e8f0"><strong>' + x.label + '</strong>: ' +
+            U.esc(x.name) + ' <span class="badge badge-blue">' + x.rows + ' baris</span></div>').join('') +
+          '<p class="hint" style="margin-top:10px">Saldo awal dibuat sebagai transaksi masuk bertanda <code>SALDO AWAL</code> pada tanggal transaksi pertama. Tanggal & supplier kosong diisi dari baris sebelumnya. Baris tanpa SKU/#N/A masuk ke produk <strong>SKU TIDAK DIKETAHUI (CEK EXCEL)</strong>.</p>' +
+          '</div></div><br>'
+        : '<div class="card"><div class="card-head"><h3>3. Mapping Kolom</h3><span class="badge badge-green">' + s.rows.length + ' baris terbaca</span></div><div class="card-body">' +
+          '<div class="form-grid">' + mapping + '</div></div></div><br>';
+
+      return result +
+        '<div class="card"><div class="card-head"><h3>1. File & Sheet</h3><span class="badge badge-blue">' + U.esc(s.fileName) + '</span></div><div class="card-body">' +
+        '<div class="form-grid">' +
+        '<div class="field"><label>Sheet</label><select id="impSheet">' + s.sheets.map(sh =>
+          '<option value="' + U.esc(sh) + '"' + (sh === s.sheet ? ' selected' : '') + '>' + U.esc(sh) + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Baris header ke-</label><input type="number" id="impHeaderRow" min="1" max="50" value="' + U.num(s.headerRow) + '"></div>' +
+        '</div><div style="margin-top:10px"><input type="file" id="impFile" accept=".xlsx,.xls,.csv,.ods"></div>' +
+        '</div></div><br>' +
+        '<div class="card"><div class="card-head"><h3>2. Mode Import</h3></div><div class="card-body">' +
+        '<div class="form-grid">' +
+        [['stok', 'Workbook Stok Lengkap (3 sheet)'], ['mutasi', 'Otomatis: produk + masuk/keluar'], ['inbound', 'Barang masuk saja'], ['outbound', 'Barang keluar saja'], ['products', 'Database produk saja']]
+          .map(m => '<div class="field"><label style="display:flex;gap:8px;align-items:center">' +
+            '<input type="radio" name="impMode" value="' + m[0] + '"' + (s.mode === m[0] ? ' checked' : '') + ' style="width:auto"> ' + m[1] + '</label></div>').join('') +
+        '</div><p class="hint" style="margin-top:10px">Mode <strong>Workbook Stok Lengkap</strong> otomatis membaca sheet <em>DAFTAR PRODUK</em>, <em>PRODUK MASUK</em>, dan <em>PRODUK KELUAR</em>, termasuk saldo awal, tanggal/supplier yang kosong (diisi dari baris atas), serta baris <code>#N/A</code> tanpa SKU (ditandai "SKU TIDAK DIKETAHUI"). Mode "Otomatis" untuk file dengan satu sheet dan kolom <strong>Jenis</strong>.</p>' +
+        '</div></div><br>' +
+        step3 +
+        '<div class="card"><div class="card-head"><h3>4. Preview (8 baris pertama)</h3></div><div class="card-body">' +
+        '<div class="table-wrap"><table class="data-table"><thead><tr>' + s.headers.map(h => '<th>' + U.esc(h) + '</th>').join('') +
+        '</tr></thead><tbody>' + preview + '</tbody></table></div>' +
+        '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn btn-primary" id="impRun"' + (s.busy || !can('import.create') ? ' disabled' : '') + '>' + (s.busy ? 'Mengimpor...' : '⬆️ Import ' + (isStok ? 'Workbook Stok' : s.rows.length + ' Baris')) + '</button>' +
+        '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="impSkipDuplicate"' + (s.skipDuplicate !== false ? ' checked' : '') + ' style="width:auto"> Lewati duplikat</label>' +
+        '</div></div></div>';
+    },
+    bind(root) { this.bindArea(root); },
+    bindArea(root) {
+      const self = this;
+      const area = () => U.$('#importArea', root);
+      const rebind = () => { area().innerHTML = self.area(); self.bindArea(root); };
+
+      const file = U.$('#impFile', root);
+      if (file) file.addEventListener('change', e => {
+        const f = e.target.files[0]; if (!f) return;
+        if (!window.XLSX) { UI.toast('Library Excel belum termuat. Periksa internet lalu refresh.', 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            impWorkbook = XLSX.read(new Uint8Array(reader.result), { type: 'array', cellDates: true });
+            impState.fileName = f.name;
+            impState.sheets = impWorkbook.SheetNames;
+            impState.sheet = impWorkbook.SheetNames[0];
+            impState.headerRow = 1;
+            impParseSheet();
+            rebind();
+            UI.toast('File terbaca: ' + impState.rows.length + ' baris', 'success');
+          } catch (err) { UI.toast('Gagal membaca file: ' + err.message, 'error'); }
+        };
+        reader.readAsArrayBuffer(f);
+      });
+
+      const sheet = U.$('#impSheet', root);
+      if (sheet) sheet.addEventListener('change', e => { impState.sheet = e.target.value; impParseSheet(); rebind(); });
+      const hr = U.$('#impHeaderRow', root);
+      if (hr) hr.addEventListener('change', e => { impState.headerRow = Math.max(1, U.num(e.target.value)); impParseSheet(); rebind(); });
+      U.$$('[data-imp-map]', root).forEach(sel => sel.addEventListener('change', e => {
+        impState.mapping[e.target.dataset.impMap] = e.target.value;
+      }));
+      U.$$('input[name=impMode]', root).forEach(r => r.addEventListener('change', e => {
+        impState.mode = e.target.value; impParseSheet(); rebind();
+      }));
+      const skip = U.$('#impSkipDuplicate', root);
+      if (skip) skip.addEventListener('change', e => { impState.skipDuplicate = e.target.checked; });
+
+      const tmpl = U.$('#impTemplate', root);
+      if (tmpl) tmpl.addEventListener('click', () => {
+        const headers = ['Tanggal', 'Jenis', 'SKU', 'Nama Produk', 'Kategori', 'Ukuran', 'Jumlah', 'Supplier/Dari', 'Tujuan/Ke', 'Petugas', 'Kondisi', 'No. Surat Jalan', 'Keterangan'];
+        U.exportExcel('template-import-stok', [headers,
+          [U.today(), 'Masuk', 'ST001', 'Meja Makan Jati', 'Meja', '180 x 90 cm', 10, 'CV Jati Utama', '', 'Budi', 'Baik', '', 'Stok awal'],
+          [U.today(), 'Keluar', 'ST001', 'Meja Makan Jati', 'Meja', '180 x 90 cm', 2, '', 'Toko ABC', 'Budi', 'Baik', 'SJ/001', 'Kirim customer']
+        ], 'Template Import');
+      });
+
+      const run = U.$('#impRun', root);
+      if (run) run.addEventListener('click', () => {
+        if (!can('import.create')) return;
+        impState.busy = true; rebind();
+        const s = impState;
+        if (s.mode === 'stok') {
+          const res = impImportWorkbook();
+          impState.result = res;
+          impState.busy = false;
+          rebind();
+          UI.toast('Import selesai: ' + (res.products + res.saldoAwal + res.inbound + res.outbound) + ' data ditambahkan' +
+            (res.flagged ? ', ' + res.flagged + ' baris perlu dicek' : ''), 'success');
+          if (window.App) App.updateBadge();
+          return;
+        }
+        const res = { products: 0, inbound: 0, outbound: 0, skipped: 0, errors: [] };
+        s.rows.forEach((row, idx) => {
+          try {
+            const sku = String(impVal(row, 'sku') || '').trim();
+            const nama = String(impVal(row, 'nama') || '').trim();
+            if (s.mode === 'products') {
+              if (!sku && !nama) { res.skipped++; return; }
+              const exist = DB.all('products').find(p => sku && p.sku.toLowerCase() === sku.toLowerCase());
+              if (exist) {
+                const patch = {};
+                if (nama) patch.name = nama;
+                if (impVal(row, 'kategori')) patch.category = String(impVal(row, 'kategori'));
+                if (impVal(row, 'ukuran')) patch.size = String(impVal(row, 'ukuran'));
+                if (impVal(row, 'status')) patch.status = String(impVal(row, 'status'));
+                if (impVal(row, 'minStock') !== '') patch.minStock = U.num(impVal(row, 'minStock'));
+                DB.update('products', exist.id, patch);
+              } else {
+                DB.insert('products', {
+                  sku: sku || ('IMP' + Date.now() + idx), name: nama || sku, category: String(impVal(row, 'kategori') || 'Lainnya'),
+                  size: String(impVal(row, 'ukuran') || ''), status: String(impVal(row, 'status') || 'Gudang'),
+                  minStock: U.num(impVal(row, 'minStock')), photo: DB.svgPhoto('📦', '#f1f5f9'),
+                  notes: String(impVal(row, 'keterangan') || '')
+                });
+                res.products++;
+              }
+              return;
+            }
+
+            const qty = U.num(impVal(row, 'qty'));
+            if (!qty || qty <= 0) { res.errors.push('Baris ' + (idx + 2) + ': jumlah tidak valid'); return; }
+            const date = impDate(impVal(row, 'tanggal')) || U.today();
+            let type = s.mode;
+            if (s.mode === 'mutasi') {
+              const raw = String(impVal(row, 'jenis') || '').toLowerCase();
+              const tujuan = String(impVal(row, 'tujuan') || '').toLowerCase();
+              type = /keluar|out|kirim|jual|customer|export/.test(raw) || (!raw && tujuan) ? 'outbound' : 'inbound';
+            }
+            let product = DB.all('products').find(p => sku && p.sku.toLowerCase() === sku.toLowerCase());
+            if (!product && nama) product = DB.all('products').find(p => p.name.toLowerCase() === nama.toLowerCase());
+            if (!product) {
+              product = DB.insert('products', {
+                sku: sku || ('IMP' + Date.now() + idx), name: nama || sku || 'Produk Import',
+                category: String(impVal(row, 'kategori') || 'Lainnya'), size: String(impVal(row, 'ukuran') || ''),
+                status: 'Gudang', minStock: 0, photo: DB.svgPhoto('📦', '#f1f5f9'), notes: 'Dibuat saat import'
+              });
+              res.products++;
+            }
+            const supplier = String(impVal(row, 'supplier') || '');
+            const tujuan = String(impVal(row, 'tujuan') || '');
+            const petugas = String(impVal(row, 'petugas') || '');
+            const kondisi = String(impVal(row, 'kondisi') || 'Baik');
+            const sj = String(impVal(row, 'suratJalan') || '');
+            const notes = String(impVal(row, 'keterangan') || '');
+            const dup = DB.all(type).find(x => x.productId === product.id && U.num(x.qty) === qty && x.date === date &&
+              String(type === 'inbound' ? x.supplier : x.destination).toLowerCase() === String(type === 'inbound' ? supplier : tujuan).toLowerCase());
+            if (s.skipDuplicate !== false && dup) { res.skipped++; return; }
+            const base = {
+              date, productId: product.id, sku: product.sku, productName: product.name,
+              qty, notes, createdAt: new Date().toISOString()
+            };
+            if (type === 'inbound') {
+              DB.insert('inbound', Object.assign({}, base, { supplier: supplier || '-', condition: kondisi || 'Baik', receiver: petugas || '-' }));
+              res.inbound++;
+            } else {
+              DB.insert('outbound', Object.assign({}, base, {
+                type: 'Customer', destination: tujuan || '-', artisanReceiver: '-', suratJalan: sj || '-',
+                staff: petugas || (DB.currentUser() || {}).name || '-'
+              }));
+              res.outbound++;
+            }
+          } catch (err) { res.errors.push('Baris ' + (idx + 2) + ': ' + err.message); }
+        });
+        impState.result = res;
+        impState.busy = false;
+        rebind();
+        UI.toast('Import selesai: ' + (res.inbound + res.outbound + res.products) + ' data ditambahkan', 'success');
+        if (window.App) App.updateBadge();
+      });
+    }
+  };
+
   notifications.alerts = alerts;
-  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll };
+  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll, import: importView };
 })());

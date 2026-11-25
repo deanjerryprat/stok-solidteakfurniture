@@ -30,11 +30,13 @@ Data awal sudah terisi: **10 produk** dan **10 pengrajin**, lengkap dengan trans
 - **SPK**: surat perintah kerja per pengrajin, bisa langsung dibuatkan distribusi.
 - **Gaji Karyawan Harian**: tanggal, nama karyawan, gaji harian, upah lembur per jam, jumlah masuk (hari), jam lembur, catatan; total harian otomatis; filter tanggal/karyawan; export Excel & PDF; akses edit untuk ADMIN/MANAGER, lihat untuk role lain.
 - **Slip Gaji Mingguan**: pilih karyawan + minggu (Senin–Minggu), rincian kehadiran & lembur, input **bonus**, **total bon/hutang**, dan **potongan telat masuk**, hitung **gaji bersih**, lalu **Cetak Slip Gaji** (jendela print / Save as PDF).
+- **Import Excel / CSV**: upload file `.xlsx/.xls/.csv`, pilih sheet & baris header, mapping kolom, preview, lalu impor. Mode **Workbook Stok Lengkap** otomatis membaca sheet `DAFTAR PRODUK`, `PRODUK MASUK`, `PRODUK KELUAR`: membuat produk, transaksi **Saldo Awal** dari `STOCK AWAL`, mengisi tanggal/supplier kosong dari baris sebelumnya, dan menandai baris `#N/A` tanpa SKU sebagai produk **SKU TIDAK DIKETAHUI (CEK EXCEL)**. Mode **Otomatis** membuat produk baru bila SKU belum ada dan memisahkan transaksi **Masuk/Keluar** dari kolom Jenis; mode lain: masuk saja, keluar saja, atau produk saja. Ada tombol **Unduh Template** dan opsi **Lewati duplikat**. Akses import: ADMIN, GUDANG, PURCHASING (MANAGER hanya lihat).
 - **Laporan**: barang masuk, barang keluar, stok keseluruhan, stok per pengrajin; filter tanggal, produk, kategori, pengrajin, status; export **Excel (.xlsx)** dan **PDF**.
 - **Pencarian cepat**: SKU, nama produk, pengrajin, tanggal transaksi.
 - **Notifikasi otomatis**: deadline terlewat, mendekati deadline, barang perlu QC, pengrajin kirim barang, pekerjaan selesai, stok menipis.
 - **Pengguna & Hak Akses**: 5 role dengan username/password dan pembatasan menu.
 - **Backup/Pulihkan data** dan **Reset data contoh** (khusus ADMIN, di sidebar).
+- **Backup Cloud**: salinan otomatis/manual ke **Google Sheet + Google Drive + Gmail** lewat Apps Script gratis, selain database Supabase.
 
 ## Logika stok otomatis
 
@@ -149,6 +151,33 @@ Sama seperti mode lokal: `admin/admin123`, `gudang/gudang123`, `purchasing/purch
 
 Untuk memindahkan data manual: **Backup data (.json)** di sidebar, lalu **Pulihkan data** di perangkat/hosting tujuan (khusus ADMIN). Saat dalam mode Supabase, akun pengguna tidak ikut ditimpa saat pulihkan/reset.
 
+## Backup cadangan ke Google Sheet + Gmail (gratis)
+
+Selain Supabase (database bersama otomatis), aplikasi bisa mengirim **salinan seluruh tabel** ke Google Sheet, menyimpan file JSON di Google Drive, dan mengirim email ke Gmail. Ini melindungi data jika website/hosting bermasalah.
+
+### Persiapan sekali saja
+1. Buat satu **Google Sheet kosong**. Dari URL-nya, salin **Sheet ID** (bagian antara `/d/` dan `/edit`).
+2. Buka sheet itu → **Extensions → Apps Script**. Hapus kode default, lalu tempel seluruh isi file **`google-apps-script/Code.gs`**.
+3. **Project Settings → Script Properties**, tambahkan:
+   - `SHEET_ID` = Sheet ID dari langkah 1
+   - `BACKUP_TOKEN` = token bebas, misalnya `solidteak2026`
+   - `BACKUP_EMAIL` = alamat Gmail penerima (opsional, bisa diisi di aplikasi)
+4. **Deploy → New deployment → Web app**:
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+   - Klik **Deploy**, lalu salin **Web App URL** (`.../exec`).
+5. Di aplikasi buka **Pengaturan → Backup ke Google Sheet + Gmail**. Isi Web App URL, email Gmail, dan token yang sama. Klik **Simpan Pengaturan**, lalu **Backup Sekarang**.
+
+### Yang terjadi saat backup
+- Setiap tabel (`products`, `inbound`, `outbound`, `wages`, dll.) dibuat menjadi **tab tersendiri** di Google Sheet dan ditimpa dengan data terbaru.
+- File **JSON mentah** disimpan di Google Drive dan **dilampirkan ke email Gmail**.
+- Tab `_BACKUP_INFO` berisi waktu backup dan jumlah baris.
+- Jika centang **Backup otomatis**, aplikasi mengirim salinan 20 detik setelah ada perubahan data (masih dibatasi quota Apps Script).
+
+> **Keamanan:** siapa pun yang mengetahui Web App URL **dan** token bisa menimpa sheet. Simpan token baik-baik. Untuk email, akun Gmail pribadi punya batas kuota pengiriman harian; untuk pemakaian harian berat, sebaiknya pakai Google Workspace.
+
+> **CORS:** `TextOutput` Apps Script **tidak mendukung** `setHeader()`. Jangan menambahkan kode tersebut (membuat `doGet/doPost` berstatus **Failed** di menu **Executions**). Aplikasi sudah mengirim POST dengan `Content-Type: text/plain`, sehingga tidak perlu preflight. Kalau browser tetap memblokir pembacaan jawaban, aplikasi otomatis mengirim ulang dengan mode `no-cors`; data tetap masuk, hanya notifikasi jumlah baris yang tidak terbaca — cek Sheet/email untuk memastikan.
+
 ## Struktur file
 
 ```
@@ -159,11 +188,12 @@ js/utils.js     helper tanggal, format, export Excel/PDF
 js/store.js     database (lokal/Supabase), data contoh, kalkulasi stok, auth & role
 js/ui.js        modal, form, tabel, notifikasi toast
 js/views.js     dashboard, produk, barang masuk/keluar, pengrajin
-js/views2.js    distribusi, barang kembali/QC, SPK, laporan, gaji karyawan & slip mingguan, pencarian, notifikasi, user, pengaturan
+js/views2.js    distribusi, barang kembali/QC, SPK, import Excel/CSV, laporan, gaji karyawan & slip mingguan, pencarian, notifikasi, user, pengaturan + backup sheet/gmail
 js/app.js       login, router hash, navigasi, hak akses
 supabase/schema.sql        tabel + GRANT + RLS + fungsi login + akun demo
 supabase/fix-permission.sql  perbaikan cepat error "permission denied" pada project lama
 supabase/fix-auth.sql        perbaikan cepat error login "digest does not exist" / fungsi authenticate
 supabase/add-wages.sql       tambah tabel wages ke project Supabase yang sudah ada
+google-apps-script/Code.gs   endpoint backup ke Google Sheet, Drive, dan Gmail
 js/login.js     logika halaman masuk, lalu alihkan ke app.html
 ```
