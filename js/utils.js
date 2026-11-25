@@ -10,6 +10,7 @@ window.U = (function () {
 
   const num = v => Number(v || 0);
   function fmt(n) { return num(n).toLocaleString('id-ID'); }
+  function rp(n) { return 'Rp ' + fmt(n); }
 
   function today() {
     const d = new Date();
@@ -117,5 +118,5 @@ window.U = (function () {
   }
   function unique(arr) { return Array.from(new Set(arr)); }
 
-  return { $, $$, esc, num, fmt, today, shiftDays, dateID, dateTime, uid, download, toCSV, exportExcel, exportPDF, badge, sum, group, unique };
+  return { $, $$, esc, num, fmt, rp, today, shiftDays, dateID, dateTime, uid, download, toCSV, exportExcel, exportPDF, badge, sum, group, unique };
 })();

@@ -5,7 +5,7 @@ window.DB = (function () {
   const CONFIG_KEY = 'furniture_supabase_config';
   const MODE_KEY = 'furniture_db_mode';
   const DISABLE_KEY = 'furniture_supabase_disabled';
-  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'users'];
+  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'users'];
   let cache = null;
   let mode = localStorage.getItem(MODE_KEY) || 'local';
   let sb = null;
@@ -155,8 +155,25 @@ window.DB = (function () {
       };
     });
 
+    const wages = [
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -9, 'Lembur finishing kursi'],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -9, ''],
+      ['Agus Saliman', 160000, 25000, 1, 1, -8, 'Lembur perakitan'],
+      ['Rizky Prasetyo', 150000, 25000, 1, 3, -7, 'Lembur pengiriman'],
+      ['Sinta Wulandari', 140000, 20000, 1, 1, -6, ''],
+      ['Agus Saliman', 160000, 25000, 1, 0, -5, ''],
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -3, 'Lembur finishing'],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -2, ''],
+      ['Agus Saliman', 160000, 25000, 1, 2, -1, 'Lembur packing'],
+      ['Rizky Prasetyo', 150000, 25000, 1, 1, 0, 'Masuk hari ini']
+    ].map((w, i) => ({
+      id: 'WG' + String(i + 1).padStart(3, '0'), date: d(w[5]), employee: w[0],
+      dailyWage: w[1], overtimeRate: w[2], days: w[3], overtimeHours: w[4],
+      notes: w[6], createdAt: new Date().toISOString()
+    }));
+
     return {
-      version: 1, products, artisans, inbound, outbound, distributions, returns, qc, spk,
+      version: 1, products, artisans, inbound, outbound, distributions, returns, qc, spk, wages,
       users: [
         { id: 'U1', username: 'admin', password: hash('admin123'), name: 'Administrator', role: 'ADMIN', active: true },
         { id: 'U2', username: 'gudang', password: hash('gudang123'), name: 'Budi (Gudang)', role: 'GUDANG', active: true },
@@ -272,7 +289,8 @@ window.DB = (function () {
     const out = {};
     for (const name of TABLES) {
       const { data, error } = await sb.from(name).select('*');
-      if (error) throw new Error('Gagal memuat ' + name + ': ' + error.message);
+      if (error) throw new Error('Gagal memuat ' + name + ': ' + error.message +
+        (name === 'wages' ? '. Jalankan supabase/add-wages.sql di SQL Editor untuk membuat tabel gaji.' : ''));
       out[name] = data || [];
     }
     cache = out; save(); return cache;
@@ -387,6 +405,27 @@ window.DB = (function () {
     return out;
   }
 
+  /* ---------- Gaji karyawan ---------- */
+  function wageTotal(w) { return U.num(w.days) * U.num(w.dailyWage) + U.num(w.overtimeHours) * U.num(w.overtimeRate); }
+  function payrollSummary(date) {
+    const rows = all('wages').filter(w => !date || w.date === date);
+    return {
+      rows: rows,
+      employees: U.unique(rows.map(w => w.employee)).length,
+      basic: U.sum(rows, w => U.num(w.days) * U.num(w.dailyWage)),
+      overtime: U.sum(rows, w => U.num(w.overtimeHours) * U.num(w.overtimeRate)),
+      total: U.sum(rows, wageTotal)
+    };
+  }
+  function payrollWeek(employee, start) {
+    const end = U.shiftDays(6, start);
+    const rows = all('wages').filter(w => w.employee === employee && w.date >= start && w.date <= end)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const basic = U.sum(rows, w => U.num(w.days) * U.num(w.dailyWage));
+    const overtime = U.sum(rows, w => U.num(w.overtimeHours) * U.num(w.overtimeRate));
+    return { employee, start, end, rows, basic, overtime, subtotal: basic + overtime };
+  }
+
   function artisanStats(aid) {
     const dists = all('distributions').filter(x => x.artisanId === aid);
     const rets = all('returns').filter(x => x.artisanId === aid);
@@ -449,10 +488,10 @@ window.DB = (function () {
 
   const PERMS = {
     ADMIN: ['*'],
-    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.view', 'qc.*', 'spk.view', 'reports.*', 'search', 'notifications'],
-    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications'],
-    PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.*', 'qc.view', 'spk.*', 'reports.view', 'search', 'notifications'],
-    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'reports.*', 'search', 'notifications']
+    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.view', 'qc.*', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.view'],
+    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications', 'payroll.view'],
+    PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.*', 'qc.view', 'spk.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
+    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'reports.*', 'search', 'notifications', 'payroll.*']
   };
   function can(perm) {
     const u = currentUser();
@@ -468,7 +507,7 @@ window.DB = (function () {
     KEY, TABLES, load, save, reset, replace, all, get, insert, update, remove,
     getConfig, saveConfig, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyDist, qtyReturn, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcRejected,
-    stock, totals, artisanStats, distRemaining, validate,
+    stock, totals, payrollSummary, payrollWeek, wageTotal, artisanStats, distRemaining, validate,
     authenticate, currentUser, login, logout, can, hash, hashAsync, svgPhoto
   };
 })();

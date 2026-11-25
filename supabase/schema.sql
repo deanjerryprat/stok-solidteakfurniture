@@ -120,6 +120,18 @@ create table if not exists public.spk (
   "createdAt" text
 );
 
+create table if not exists public.wages (
+  id text primary key,
+  date text,
+  employee text,
+  "dailyWage" numeric default 0,
+  "overtimeRate" numeric default 0,
+  days numeric default 1,
+  "overtimeHours" numeric default 0,
+  notes text,
+  "createdAt" text
+);
+
 create table if not exists public.users (
   id text primary key,
   username text unique not null,
@@ -151,6 +163,7 @@ alter table public.distributions enable row level security;
 alter table public.returns       enable row level security;
 alter table public.qc            enable row level security;
 alter table public.spk           enable row level security;
+alter table public.wages         enable row level security;
 alter table public.users         enable row level security;
 
 drop policy if exists app_all on public.products;
@@ -161,6 +174,7 @@ drop policy if exists app_all on public.distributions;
 drop policy if exists app_all on public.returns;
 drop policy if exists app_all on public.qc;
 drop policy if exists app_all on public.spk;
+drop policy if exists app_all on public.wages;
 drop policy if exists app_all on public.users;
 
 create policy app_all on public.products      for all to anon, authenticated using (true) with check (true);
@@ -171,6 +185,7 @@ create policy app_all on public.distributions for all to anon, authenticated usi
 create policy app_all on public.returns       for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.qc            for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.spk           for all to anon, authenticated using (true) with check (true);
+create policy app_all on public.wages         for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.users         for all to anon, authenticated using (true) with check (true);
 
 -- ---------- FUNGSI LOGIN ----------

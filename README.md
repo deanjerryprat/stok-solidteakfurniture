@@ -20,7 +20,7 @@ Data awal sudah terisi: **10 produk** dan **10 pengrajin**, lengkap dengan trans
 
 ## Menu yang tersedia
 
-- **Dashboard**: total seluruh stok, barang masuk, barang keluar, stok gudang, stok di pengrajin, menunggu QC, rusak/afkir, barang di borong obat, grafik stok, aktivitas terbaru, pekerjaan terlambat, stok menipis.
+- **Dashboard**: total seluruh stok, barang masuk, barang keluar, stok gudang, stok di pengrajin, menunggu QC, rusak/afkir, barang di borong obat, grafik stok, aktivitas terbaru, pekerjaan terlambat, stok menipis, **ringkasan gaji karyawan hari ini**.
 - **Database Produk**: SKU, nama, kategori, foto (bisa di-upload), ukuran, status, stok minimum, dan riwayat per produk.
 - **Barang Masuk**: tanggal, supplier/pengrajin, produk, jumlah, kondisi, petugas penerima, keterangan.
 - **Barang Keluar**: Customer / Borong Obat / Rusak-Afkir, tanggal, produk, jumlah, tujuan, penerima, nomor surat jalan, petugas gudang.
@@ -28,6 +28,8 @@ Data awal sudah terisi: **10 produk** dan **10 pengrajin**, lengkap dengan trans
 - **Distribusi ke Pengrajin**: pembagian pekerjaan (contoh Dining Chair 500 pcs ke 4 pengrajin), target, bukti penerimaan, relasi dengan SPK.
 - **Barang Kembali & QC**: penerimaan hasil pengrajin (tidak boleh melebihi sisa barang), QC lulus/afkir, dan daftar **barang jadi siap kirim**.
 - **SPK**: surat perintah kerja per pengrajin, bisa langsung dibuatkan distribusi.
+- **Gaji Karyawan Harian**: tanggal, nama karyawan, gaji harian, upah lembur per jam, jumlah masuk (hari), jam lembur, catatan; total harian otomatis; filter tanggal/karyawan; export Excel & PDF; akses edit untuk ADMIN/MANAGER, lihat untuk role lain.
+- **Slip Gaji Mingguan**: pilih karyawan + minggu (Senin–Minggu), rincian kehadiran & lembur, input **bonus**, **total bon/hutang**, dan **potongan telat masuk**, hitung **gaji bersih**, lalu **Cetak Slip Gaji** (jendela print / Save as PDF).
 - **Laporan**: barang masuk, barang keluar, stok keseluruhan, stok per pengrajin; filter tanggal, produk, kategori, pengrajin, status; export **Excel (.xlsx)** dan **PDF**.
 - **Pencarian cepat**: SKU, nama produk, pengrajin, tanggal transaksi.
 - **Notifikasi otomatis**: deadline terlewat, mendekati deadline, barang perlu QC, pengrajin kirim barang, pekerjaan selesai, stok menipis.
@@ -107,7 +109,7 @@ Aplikasi sudah mendukung dua mode:
 
 1. Buat project gratis di **https://supabase.com** (pilih region terdekat, mis. Singapore).
 2. Buka **SQL Editor → New query**, salin seluruh isi file **`supabase/schema.sql`**, lalu klik **Run**.
-   - Skrip ini membuat 9 tabel, RLS policy, fungsi login `authenticate()`, dan 5 akun demo.
+   - Skrip ini membuat 10 tabel (termasuk `wages` untuk gaji karyawan), RLS policy, fungsi login `authenticate()`, dan 5 akun demo.
    - Password diverifikasi di server dengan SHA-256 (bukan disimpan plaintext).
 3. Ambil kredensialnya (dua cara, pilih salah satu):
    - **Cara cepat:** klik tombol **Connect** di kanan atas halaman project → dialog akan menampilkan **Project URL** dan **publishable key** (`sb_publishable_...`).
@@ -130,7 +132,8 @@ Pesan error sekarang akan menunjukkan penyebabnya. Cek berurutan:
 3. Key harus **Publishable** (`sb_publishable_...`) atau anon lama (`eyJ...`). Kalau terlanjur memakai **secret key** (`sb_secret_...`), aplikasi akan menolak dengan pesan khusus.
 4. Kalau pesannya menyebut **`relation "public.users" does not exist`** → SQL belum jalan / salah project. Kalau **`invalid API key`/`JWT`** → key salah. Kalau **`permission denied for table ...`** → role `anon` belum mendapat `GRANT`. Jalankan file **`supabase/fix-permission.sql`** di SQL Editor → Run (aman dijalankan berulang), lalu klik **Aktifkan Supabase** lagi. `schema.sql` terbaru sudah memuat GRANT ini untuk project baru.
 5. Kalau koneksi tabel berhasil tapi **login gagal** dengan pesan **`function digest(text, unknown) does not exist`**, jalankan file **`supabase/fix-auth.sql`** di SQL Editor → Run. File itu memperbaiki `search_path` fungsi `authenticate()` agar menemukan `pgcrypto` di schema `extensions`, lalu memuat ulang cache PostgREST. Setelah itu refresh aplikasi.
-6. Jika sudah deploy, **deploy ulang** folder aplikasi setelah memperbarui file.
+6. **Project Supabase yang sudah ada:** untuk menambah tabel gaji tanpa menghapus data lama, jalankan **`supabase/add-wages.sql`** di SQL Editor → Run. File ini membuat tabel `wages`, policy, dan 10 data contoh gaji. (`schema.sql` terbaru juga sudah memuat tabel ini untuk project baru.)
+7. Jika sudah deploy, **deploy ulang** folder aplikasi setelah memperbarui file.
 
 ### Akun demo Supabase
 
@@ -156,10 +159,11 @@ js/utils.js     helper tanggal, format, export Excel/PDF
 js/store.js     database (lokal/Supabase), data contoh, kalkulasi stok, auth & role
 js/ui.js        modal, form, tabel, notifikasi toast
 js/views.js     dashboard, produk, barang masuk/keluar, pengrajin
-js/views2.js    distribusi, barang kembali/QC, SPK, laporan, pencarian, notifikasi, user, pengaturan
+js/views2.js    distribusi, barang kembali/QC, SPK, laporan, gaji karyawan & slip mingguan, pencarian, notifikasi, user, pengaturan
 js/app.js       login, router hash, navigasi, hak akses
 supabase/schema.sql        tabel + GRANT + RLS + fungsi login + akun demo
 supabase/fix-permission.sql  perbaikan cepat error "permission denied" pada project lama
 supabase/fix-auth.sql        perbaikan cepat error login "digest does not exist" / fungsi authenticate
+supabase/add-wages.sql       tambah tabel wages ke project Supabase yang sudah ada
 js/login.js     logika halaman masuk, lalu alihkan ke app.html
 ```

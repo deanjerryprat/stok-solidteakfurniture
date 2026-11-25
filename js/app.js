@@ -17,6 +17,9 @@ window.App = (function () {
       { key: 'returns', label: 'Barang Kembali & QC', icon: '↩️', perm: 'returns.view' },
       { key: 'spk', label: 'SPK', icon: '📝', perm: 'spk.view' }
     ]},
+    { group: 'Keuangan', items: [
+      { key: 'payroll', label: 'Gaji Karyawan', icon: '💰', perm: 'payroll.view' }
+    ]},
     { group: 'Laporan & Sistem', items: [
       { key: 'reports', label: 'Laporan', icon: '📑', perm: 'reports.view' },
       { key: 'users', label: 'Pengguna', icon: '👤', perm: 'users.view' },

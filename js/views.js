@@ -65,6 +65,16 @@ window.Views = (function () {
         (low.length ? low.map(p => '<div class="timeline-item"><span>📦</span><div><div><strong>' + U.esc(p.name) + '</strong> — ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs</div>' +
           '<small>Minimum ' + U.fmt(p.minStock) + ' pcs</small></div></div>').join('') :
           '<div class="empty">Semua stok aman</div>') + '</div></div></div>' +
+        (can('payroll.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>💰 Gaji Karyawan Harian</h3><a href="#/payroll" class="link-btn">Buka menu gaji</a></div><div class="card-body">' +
+          (function () {
+            const p = DB.payrollSummary(U.today());
+            return '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
+              '<div><div style="color:var(--muted);font-size:12px">Total gaji hari ini</div><strong style="font-size:18px">' + U.rp(p.total) + '</strong></div>' +
+              '<div><div style="color:var(--muted);font-size:12px">Karyawan masuk</div><strong style="font-size:18px">' + U.fmt(p.employees) + ' orang</strong></div>' +
+              '<div><div style="color:var(--muted);font-size:12px">Upah lembur</div><strong style="font-size:18px">' + U.rp(p.overtime) + '</strong></div>' +
+              '</div><div style="margin-top:10px;color:var(--muted);font-size:12px">Catat gaji harian dan cetak slip gaji mingguan (bonus, bon/hutang, potongan telat) di menu Gaji Karyawan.</div>';
+          })() +
+          '</div></div>' : '') +
         '<div class="card" style="margin-top:16px"><div class="card-head"><h3>Alur Simulasi Stok</h3></div><div class="card-body">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
         ['Barang Masuk', 'Stok Gudang', 'Distribusi ke Pengrajin', 'Proses Pengerjaan', 'Barang Kembali', 'QC', 'Barang Jadi', 'Pengiriman Customer']

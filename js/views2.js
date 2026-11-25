@@ -14,7 +14,9 @@ Object.assign(window.Views, (function () {
 
   const state = {
     distSearch: '', distArtisan: '', distStatus: '', returnsTab: 'kembali', spkSearch: '',
-    reportTab: 'masuk', from: U.shiftDays(-30), to: U.today(), reportProduct: '', reportCategory: '', reportArtisan: '', reportStatus: ''
+    reportTab: 'masuk', from: U.shiftDays(-30), to: U.today(), reportProduct: '', reportCategory: '', reportArtisan: '', reportStatus: '',
+    payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '',
+    slipEmployee: '', slipWeek: '', slipBonus: 0, slipDebt: 0, slipLate: 0
   };
 
   /* ================= DISTRIBUSI ================= */
@@ -583,6 +585,223 @@ Object.assign(window.Views, (function () {
     }
   };
 
+  /* ================= GAJI KARYAWAN HARIAN & SLIP MINGGUAN ================= */
+  function weekStart(dateStr) {
+    const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+    if (isNaN(d)) return U.shiftDays(-((d.getDay() || 7) - 1));
+    const diff = (d.getDay() || 7) - 1; // Senin = awal minggu
+    d.setDate(d.getDate() - diff);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function wageForm(existing, close) {
+    const names = U.unique(DB.all('wages').map(w => w.employee));
+    UI.formModal({
+      title: existing ? 'Edit Gaji Harian' : 'Catat Gaji Harian', wide: true,
+      values: existing || {
+        date: U.today(), employee: '', dailyWage: 150000, overtimeRate: 25000,
+        days: 1, overtimeHours: 0, notes: ''
+      },
+      notice: 'Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
+      fields: [
+        { key: 'date', label: 'Tanggal', type: 'date', required: true },
+        { key: 'employee', label: 'Nama Karyawan', type: 'datalist', options: names, required: true, placeholder: 'mis. Rizky Prasetyo' },
+        { key: 'dailyWage', label: 'Gaji Harian (Rp)', type: 'number', min: 0, step: 1000, required: true },
+        { key: 'overtimeRate', label: 'Upah Lembur per Jam (Rp)', type: 'number', min: 0, step: 1000, required: true },
+        { key: 'days', label: 'Jumlah Masuk (hari)', type: 'number', min: 0, step: 0.5, required: true },
+        { key: 'overtimeHours', label: 'Jam Lembur', type: 'number', min: 0, step: 0.5 },
+        { key: 'notes', label: 'Catatan', type: 'textarea', full: true, placeholder: 'Opsional' }
+      ],
+      onSubmit(d, closeFn) {
+        d.dailyWage = U.num(d.dailyWage);
+        d.overtimeRate = U.num(d.overtimeRate);
+        d.days = U.num(d.days);
+        d.overtimeHours = U.num(d.overtimeHours);
+        if (existing) { DB.update('wages', existing.id, d); UI.toast('Data gaji diperbarui', 'success'); }
+        else { DB.insert('wages', d); UI.toast('Gaji harian dicatat', 'success'); }
+        closeFn(); App.refresh();
+      }
+    });
+  }
+
+  function slipHtml(week, bonus, debt, late) {
+    const total = week.subtotal + bonus - debt - late;
+    const detail = week.rows.map(w =>
+      '<tr><td>' + U.dateID(w.date) + '</td><td>' + U.num(w.days) + '</td>' +
+      '<td style="text-align:right">' + U.rp(w.dailyWage) + '</td>' +
+      '<td style="text-align:right">' + U.rp(U.num(w.days) * U.num(w.dailyWage)) + '</td>' +
+      '<td style="text-align:right">' + U.num(w.overtimeHours) + '</td>' +
+      '<td style="text-align:right">' + U.rp(U.num(w.overtimeHours) * U.num(w.overtimeRate)) + '</td></tr>'
+    ).join('');
+    const line = (label, value, bold) => '<tr' + (bold ? ' style="font-weight:bold;background:#f1f5f9"' : '') + '><td>' + label + '</td><td style="text-align:right">' + U.rp(value) + '</td></tr>';
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Slip Gaji ' + U.esc(week.employee) + '</title>' +
+      '<style>' +
+      'body{font-family:Segoe UI,Arial,sans-serif;padding:28px;color:#1e293b}' +
+      'h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:18px 0 8px}' +
+      '.head{display:flex;justify-content:space-between;border-bottom:2px solid #334155;padding-bottom:12px;margin-bottom:16px}' +
+      '.muted{color:#64748b;font-size:12px}table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px}' +
+      'th,td{border:1px solid #cbd5e1;padding:7px 9px;text-align:left}th{background:#e2e8f0}' +
+      '.summary{width:340px;margin-left:auto}.sign{display:flex;justify-content:space-between;margin-top:48px;font-size:12px}' +
+      '@media print{body{padding:12px}.no-print{display:none}}' +
+      '</style></head><body>' +
+      '<div class="head"><div><h1>SLIP GAJI MINGGUAN</h1><div class="muted">CV Furniture Jati — Sistem Stok & Produksi</div></div>' +
+      '<div style="text-align:right"><strong>' + U.esc(week.employee) + '</strong><br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span></div></div>' +
+      '<h2>Rincian Kehadiran & Lembur</h2>' +
+      '<table><thead><tr><th>Tanggal</th><th>Masuk (hari)</th><th>Gaji/hari</th><th>Gaji Pokok</th><th>Lembur (jam)</th><th>Upah Lembur</th></tr></thead>' +
+      '<tbody>' + (detail || '<tr><td colspan="6" style="text-align:center">Tidak ada data pada periode ini</td></tr>') + '</tbody></table>' +
+      '<h2>Rekapitulasi</h2>' +
+      '<table class="summary">' +
+      line('Gaji Pokok', week.basic) +
+      line('Upah Lembur', week.overtime) +
+      line('Bonus', bonus) +
+      line('Total Bon / Hutang', -debt) +
+      line('Potongan Telat Masuk', -late) +
+      line('GAJI BERSIH', total, true) +
+      '</table>' +
+      '<div class="sign"><div>Diterima oleh,<br><br>_______________________</div><div>Dibayar oleh,<br><br>_______________________</div></div>' +
+      '<p class="muted" style="margin-top:24px">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</p>' +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
+  }
+
+  function printSlip(week, bonus, debt, late) {
+    const html = slipHtml(week, bonus, debt, late);
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); return; }
+    // Fallback kalau popup diblokir: cetak lewat iframe tersembunyi
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    frame.srcdoc = html;
+    frame.onload = () => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) {}
+      setTimeout(() => frame.remove(), 1500);
+    };
+    document.body.appendChild(frame);
+    UI.toast('Slip disiapkan untuk dicetak', 'success');
+  }
+
+  const payroll = {
+    render() {
+      const allW = DB.all('wages');
+      const today = DB.payrollSummary(U.today());
+      const names = U.unique(allW.map(w => w.employee));
+      if (!state.slipEmployee && names.length) state.slipEmployee = names[0];
+      if (!state.slipWeek) state.slipWeek = weekStart(U.today());
+
+      let rows = allW.filter(w => (!state.payrollFrom || w.date >= state.payrollFrom) && (!state.payrollTo || w.date <= state.payrollTo));
+      rows = filterRows(rows, state.payrollQ, ['employee', 'date', 'notes']);
+      if (state.payrollEmployee) rows = rows.filter(w => w.employee === state.payrollEmployee);
+      rows.sort((a, b) => b.date.localeCompare(a.date));
+
+      const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
+      const bonus = U.num(state.slipBonus), debt = U.num(state.slipDebt), late = U.num(state.slipLate);
+      const net = week.subtotal + bonus - debt - late;
+      const weekOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const empOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.payrollEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+
+      return UI.pageHead('Gaji Karyawan Harian', 'Catatan upah harian, lembur, dan cetak slip gaji mingguan',
+          (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
+          '<button class="btn" data-act="printSlip">🖨️ Cetak Slip Mingguan</button>') +
+        '<div class="grid grid-stats">' +
+        UI.statCard({ label: 'Gaji Hari Ini', value: U.rp(today.total), sub: U.dateID(U.today()), icon: '💰' }) +
+        UI.statCard({ label: 'Karyawan Masuk Hari Ini', value: U.fmt(today.employees), sub: 'orang', icon: '👷' }) +
+        UI.statCard({ label: 'Gaji Pokok Hari Ini', value: U.rp(today.basic), sub: 'jumlah masuk × harian', icon: '📅' }) +
+        UI.statCard({ label: 'Upah Lembur Hari Ini', value: U.rp(today.overtime), sub: 'jam × tarif lembur', icon: '⏱️' }) +
+        '</div><br>' +
+        '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
+        '<button class="btn btn-sm" data-act="wageExcel">⬇ Excel</button>' +
+        '<button class="btn btn-sm" data-act="wagePdf">⬇ PDF</button></span></div><div class="card-body">' +
+        '<div class="toolbar"><input id="wageQ" placeholder="Cari nama karyawan / catatan..." value="' + U.esc(state.payrollQ) + '">' +
+        '<input type="date" id="wageFrom" value="' + U.esc(state.payrollFrom) + '">' +
+        '<input type="date" id="wageTo" value="' + U.esc(state.payrollTo) + '">' +
+        '<select id="wageEmployee"><option value="">Semua karyawan</option>' + empOpts + '</select>' +
+        '<div class="spacer"></div><strong>Total: ' + U.rp(U.sum(rows, DB.wageTotal)) + '</strong></div>' +
+        UI.table({
+          columns: [
+            { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Nama Karyawan', key: 'employee' },
+            { label: 'Gaji Harian', align: 'right', render: r => U.rp(r.dailyWage) },
+            { label: 'Lembur / Jam', align: 'right', render: r => U.rp(r.overtimeRate) },
+            { label: 'Masuk', align: 'right', render: r => U.num(r.days) + ' hari' },
+            { label: 'Jam Lembur', align: 'right', render: r => U.num(r.overtimeHours) + ' jam' },
+            { label: 'Gaji Pokok', align: 'right', render: r => U.rp(U.num(r.days) * U.num(r.dailyWage)) },
+            { label: 'Upah Lembur', align: 'right', render: r => U.rp(U.num(r.overtimeHours) * U.num(r.overtimeRate)) },
+            { label: 'Total', align: 'right', render: r => '<strong>' + U.rp(DB.wageTotal(r)) + '</strong>' },
+            { label: 'Catatan', key: 'notes' }
+          ], rows,
+          actions: can('payroll.edit') ? [{ label: 'Edit', act: 'editWage' }, { label: 'Hapus', act: 'delWage', cls: 'danger' }] : [],
+          empty: 'Belum ada catatan gaji harian.'
+        }) + '</div></div><br>' +
+        '<div class="card"><div class="card-head"><h3>🧾 Slip Gaji Mingguan</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' — ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
+        '<div class="form-grid">' +
+        '<div class="field"><label>Karyawan</label><select id="slipEmployee">' + weekOpts + '</select></div>' +
+        '<div class="field"><label>Mulai Pekan (Senin)</label><input type="date" id="slipWeek" value="' + U.esc(state.slipWeek) + '"></div>' +
+        '<div class="field"><label>Bonus (Rp)</label><input type="number" id="slipBonus" min="0" step="1000" value="' + bonus + '"></div>' +
+        '<div class="field"><label>Total Bon / Hutang (Rp)</label><input type="number" id="slipDebt" min="0" step="1000" value="' + debt + '"></div>' +
+        '<div class="field"><label>Potongan Telat Masuk (Rp)</label><input type="number" id="slipLate" min="0" step="1000" value="' + late + '"></div>' +
+        '</div>' +
+        '<div style="margin-top:14px">' + UI.table({
+          columns: [
+            { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Masuk', align: 'right', render: r => U.num(r.days) + ' hari' },
+            { label: 'Gaji Pokok', align: 'right', render: r => U.rp(U.num(r.days) * U.num(r.dailyWage)) },
+            { label: 'Lembur', align: 'right', render: r => U.num(r.overtimeHours) + ' jam' },
+            { label: 'Upah Lembur', align: 'right', render: r => U.rp(U.num(r.overtimeHours) * U.num(r.overtimeRate)) }
+          ], rows: week.rows, empty: 'Tidak ada data gaji pada pekan ini.'
+        }) + '</div>' +
+        '<div id="slipTotals" style="margin-top:14px">' + payroll.totalsHtml(week, bonus, debt, late) + '</div>' +
+        '</div></div>';
+    },
+    totalsHtml(week, bonus, debt, late) {
+      const net = week.subtotal + bonus - debt - late;
+      const line = (label, value, bold) => '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e2e8f0' + (bold ? ';font-weight:bold;font-size:16px;border-bottom:none' : '') + '"><span>' + label + '</span><span>' + U.rp(value) + '</span></div>';
+      return '<div style="max-width:380px;margin-left:auto">' +
+        line('Gaji Pokok', week.basic) + line('Upah Lembur', week.overtime) + line('Bonus', bonus) +
+        line('Total Bon / Hutang', -debt) + line('Potongan Telat Masuk', -late) + line('GAJI BERSIH', net, true) + '</div>';
+    },
+    bind(root) {
+      const refreshTable = () => { App.refresh(); const el = U.$('#wageQ'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
+      U.$('#wageQ', root).addEventListener('input', e => { state.payrollQ = e.target.value; refreshTable(); });
+      U.$('#wageFrom', root).addEventListener('change', e => { state.payrollFrom = e.target.value; App.refresh(); });
+      U.$('#wageTo', root).addEventListener('change', e => { state.payrollTo = e.target.value; App.refresh(); });
+      U.$('#wageEmployee', root).addEventListener('change', e => { state.payrollEmployee = e.target.value; App.refresh(); });
+      U.$('#slipEmployee', root).addEventListener('change', e => { state.slipEmployee = e.target.value; App.refresh(); });
+      U.$('#slipWeek', root).addEventListener('change', e => { state.slipWeek = e.target.value; App.refresh(); });
+
+      const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
+      const recalc = () => {
+        const b = U.num(U.$('#slipBonus', root)?.value), d = U.num(U.$('#slipDebt', root)?.value), l = U.num(U.$('#slipLate', root)?.value);
+        state.slipBonus = b; state.slipDebt = d; state.slipLate = l;
+        const el = U.$('#slipTotals', root);
+        if (el) el.innerHTML = payroll.totalsHtml(week, b, d, l);
+      };
+      ['#slipBonus', '#slipDebt', '#slipLate'].forEach(sel => {
+        const el = U.$(sel, root); if (el) el.addEventListener('input', recalc);
+      });
+      recalc();
+
+      U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
+        const act = b.dataset.act;
+        if (act === 'addWage') { if (can('payroll.edit')) wageForm(null); }
+        if (act === 'editWage') { const w = DB.get('wages', b.dataset.id); if (w && can('payroll.edit')) wageForm(w); }
+        if (act === 'delWage') {
+          const w = DB.get('wages', b.dataset.id);
+          if (w && can('payroll.edit')) UI.confirm('Hapus catatan gaji ' + w.employee + ' tanggal ' + U.dateID(w.date) + '?', () => { DB.remove('wages', w.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
+        }
+        if (act === 'printSlip') {
+          printSlip(week, U.num(state.slipBonus), U.num(state.slipDebt), U.num(state.slipLate));
+        }
+        if (act === 'wageExcel' || act === 'wagePdf') {
+          const rows = [['Tanggal', 'Nama Karyawan', 'Gaji Harian', 'Lembur/Jam', 'Jumlah Masuk', 'Jam Lembur', 'Gaji Pokok', 'Upah Lembur', 'Total', 'Catatan']]
+            .concat(DB.all('wages').sort((a, b) => b.date.localeCompare(a.date)).map(w => [
+              U.dateID(w.date), w.employee, w.dailyWage, w.overtimeRate, w.days, w.overtimeHours,
+              U.num(w.days) * U.num(w.dailyWage), U.num(w.overtimeHours) * U.num(w.overtimeRate), DB.wageTotal(w), w.notes || ''
+            ]));
+          if (act === 'wageExcel') U.exportExcel('laporan-gaji-karyawan', rows); else U.exportPDF('Laporan Gaji Karyawan', rows);
+        }
+      }));
+    }
+  };
+
   notifications.alerts = alerts;
-  return { distributions, returns, spk, reports, search, notifications, users, settings };
+  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll };
 })());

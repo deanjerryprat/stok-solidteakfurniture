@@ -31,6 +31,10 @@ window.UI = (function () {
         (f.placeholder ? '<option value="">' + U.esc(f.placeholder) + '</option>' : '') +
         opts.map(o => '<option value="' + U.esc(o.value) + '"' + (String(o.value) === String(v) ? ' selected' : '') + '>' + U.esc(o.label) + '</option>').join('') +
         '</select>';
+    } else if (f.type === 'datalist') {
+      const opts = (f.options || []).map(o => typeof o === 'object' ? o.value : o);
+      input = '<input type="text" id="f_' + f.key + '" data-key="' + f.key + '" list="dl_' + f.key + '" value="' + U.esc(v) + '"' + req + ' placeholder="' + U.esc(f.placeholder || '') + '">' +
+        '<datalist id="dl_' + f.key + '">' + opts.map(o => '<option value="' + U.esc(o) + '"></option>').join('') + '</datalist>';
     } else if (f.type === 'checkbox') {
       input = '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f_' + f.key + '" data-key="' + f.key + '"' + (v ? ' checked' : '') + ' style="width:auto"> ' + U.esc(f.checkLabel || 'Ya') + '</label>';
     } else if (f.type === 'file') {
