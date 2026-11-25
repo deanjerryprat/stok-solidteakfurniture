@@ -449,9 +449,19 @@ window.DB = (function () {
     const out = {};
     for (const name of TABLES) {
       const { data, error } = await sb.from(name).select('*');
-      if (error) throw new Error('Gagal memuat ' + name + ': ' + error.message +
-        (name === 'wages' ? '. Jalankan supabase/add-wages.sql di SQL Editor untuk membuat tabel gaji.' :
-         name === 'borong' ? '. Jalankan supabase/add-borong.sql di SQL Editor untuk membuat tabel gaji borong.' : ''));
+      if (error) {
+        const raw = String(error.message || error.hint || error.details || '');
+        // Tabel box baru: jangan sampai seluruh aplikasi gagal login sebelum migrasi dijalankan.
+        if (name === 'boxes' && (error.code === '42P01' || /does not exist|relation/i.test(raw))) {
+          console.warn('Tabel boxes belum ada. Jalankan supabase/add-boxes.sql di SQL Editor.');
+          out[name] = [];
+          continue;
+        }
+        throw new Error('Gagal memuat ' + name + ': ' + error.message +
+          (name === 'wages' ? '. Jalankan supabase/add-wages.sql di SQL Editor untuk membuat tabel gaji.' :
+           name === 'borong' ? '. Jalankan supabase/add-borong.sql di SQL Editor untuk membuat tabel gaji borong.' :
+           name === 'boxes' ? '. Jalankan supabase/add-boxes.sql di SQL Editor untuk membuat tabel box.' : ''));
+      }
       out[name] = data || [];
     }
     cache = out; migratePasswords(); save(); return cache;
