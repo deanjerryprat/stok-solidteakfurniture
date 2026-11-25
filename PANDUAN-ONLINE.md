@@ -102,10 +102,46 @@ Terakhir, cek kolom baru dengan menjalankan isi `supabase/add-online-updates.sql
 
 ---
 
+## 1E. Reset Supabase (opsional, kalau query sudah terlalu banyak)
+
+Tidak perlu panik kalau sudah berkali-kali menjalankan query. Script di project **idempotent**, artinya aman diulang:
+
+- `create table if not exists` → tidak membuat tabel dobel.
+- `alter table ... add column if not exists` → tidak membuat kolom dobel.
+- `drop policy if exists app_all` lalu `create policy app_all` → policy tidak menumpuk.
+- `create or replace function authenticate(...)` → fungsi ditimpa, bukan dobel.
+- `insert ... on conflict (id) do nothing` → akun bawaan tidak dobel.
+- `add-wages.sql` hanya mengisi contoh **jika tabel kosong**.
+
+Jadi **double query tidak merusak struktur**. Yang perlu diwaspadai hanyalah script lama yang gagal di tengah (seperti error `column "position" ... does not exist`); cukup jalankan ulang file yang sudah diperbaiki.
+
+Kalau tetap ingin mulai bersih, ada dua pilihan:
+
+### Opsi A — Reset data saja (disarankan)
+
+1. Backup dulu lewat aplikasi: **Pengaturan → ⬇ Backup JSON**.
+2. Jalankan `supabase/reset-data.sql`. Ini mengosongkan semua baris tetapi **tabel, kolom, GRANT, RLS, dan fungsi tetap ada**.
+3. Jalankan `supabase/schema.sql` untuk mengembalikan 5 akun bawaan.
+4. Di aplikasi, buka **Pengaturan → Kembali ke mode lokal → Aktifkan Supabase**. Data lokal yang Anda simpan akan otomatis di-upload ke Supabase yang sudah kosong.
+
+### Opsi B — Reset struktur penuh
+
+1. Backup dulu.
+2. Jalankan `supabase/reset-all.sql` (menghapus seluruh tabel dan fungsi login).
+3. Jalankan `supabase/schema.sql`.
+4. Jalankan `supabase/add-online-updates.sql` sebagai verifikasi kolom.
+5. Di aplikasi: **Pengaturan → Kembali ke mode lokal → Aktifkan Supabase** untuk mengirim data lokal ke project baru.
+
+> Setelah reset, jangan lupa **Ctrl + F5** dan cek Console browser tidak ada error.
+
+---
+
 ## 2. Update GitHub
 
 Repo: `deanjerryprat/stok-solidteakfurniture`
 Situs: <https://deanjerryprat.github.io/stok-solidteakfurniture/>
+
+**Tidak perlu reset atau hapus repo GitHub.** File di GitHub hanyalah kode/web statis; datanya ada di Supabase. Cukup upload ulang file yang berubah sebagai commit baru. Riwayat commit lama tidak masalah dan bisa dijadikan cadangan.
 
 Folder lokal saat ini **bukan git repo**, jadi cara paling mudah adalah lewat website GitHub.
 

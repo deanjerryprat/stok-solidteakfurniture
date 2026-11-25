@@ -203,6 +203,8 @@ supabase/add-borong.sql      tambah tabel borong + kolom price/rateAmplas/ratePa
 supabase/add-product-price.sql  tambah kolom price saja (bila add-borong.sql sudah pernah dijalankan)
 supabase/add-online-updates.sql  WAJIB: kolom admin borong, jabatan gaji, sumber barang kembali, inboundId QC + policy borong
 supabase/update-passwords.sql  ganti password bawaan 5 akun di project Supabase yang sudah ada
+supabase/reset-data.sql         kosongkan semua data tanpa menghapus struktur tabel
+supabase/reset-all.sql          reset struktur penuh (tabel + fungsi login)
 PANDUAN-ONLINE.md       tutorial lengkap update Supabase + upload GitHub Pages
 google-apps-script/Code.gs   endpoint backup ke Google Sheet, Drive, dan Gmail
 js/login.js     logika halaman masuk, lalu alihkan ke app.html
