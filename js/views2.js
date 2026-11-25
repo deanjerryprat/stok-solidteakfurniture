@@ -941,9 +941,9 @@ Object.assign(window.Views, (function () {
         date: U.today(), employee: '', position: DB.JOB_TITLES[0], dailyWage: 150000, overtimeRate: 25000,
         days: 1, overtimeHours: 0, notes: ''
       },
-      notice: 'Isi Nama Karyawan dan Jabatan sesuai peran di perusahaan: ' +
-        'Manager/Mandor/Angkat Junjung mengawasi pekerjaan, Pemborong Amplas mengerjakan amplas, ' +
-        'Pemborong Packing mengerjakan packing. Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
+      notice: 'Isi Nama Karyawan dan Jabatan sesuai peran di perusahaan: Manager, Mandor, Angkat Junjung, ' +
+        'Pemborong Amplas, atau Pemborong Packing. Nama baru bisa langsung diketik. ' +
+        'Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
       fields: [
         { key: 'date', label: 'Tanggal', type: 'date', required: true },
         { key: 'employee', label: 'Nama Karyawan', type: 'datalist', options: names, required: true, placeholder: 'mis. Rizky Prasetyo' },
@@ -1074,8 +1074,12 @@ Object.assign(window.Views, (function () {
       const weekOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
       const empOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.payrollEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
       const posOpts = DB.JOB_TITLES.map(p => '<option' + (state.payrollPosition === p ? ' selected' : '') + '>' + U.esc(p) + '</option>').join('');
+      const employeeCards = names.map(n => {
+        const list = allW.filter(w => w.employee === n).sort((a, b) => b.date.localeCompare(a.date));
+        return { name: n, position: (list[0] || {}).position || '-', count: list.length };
+      });
 
-      return UI.pageHead('Gaji Karyawan Harian', 'Nama karyawan & jabatan (Manager/Mandor/Angkat Junjung, Pemborong Amplas, Pemborong Packing), upah harian, lembur, dan slip mingguan',
+      return UI.pageHead('Gaji Karyawan Harian', 'Nama karyawan & jabatan (Manager, Mandor, Angkat Junjung, Pemborong Amplas, Pemborong Packing), upah harian, lembur, dan slip mingguan',
           (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
           '<button class="btn" data-act="printSlip">🖨️ Cetak Slip Mingguan</button>') +
         '<div class="grid grid-stats">' +
@@ -1084,6 +1088,12 @@ Object.assign(window.Views, (function () {
         UI.statCard({ label: 'Gaji Pokok Hari Ini', value: U.rp(today.basic), sub: 'jumlah masuk × harian', icon: '📅' }) +
         UI.statCard({ label: 'Upah Lembur Hari Ini', value: U.rp(today.overtime), sub: 'jam × tarif lembur', icon: '⏱️' }) +
         '</div><br>' +
+        '<div class="card"><div class="card-head"><h3>👷 Daftar Nama Karyawan</h3><span class="badge badge-blue">' + U.fmt(names.length) + ' orang</span></div><div class="card-body">' +
+        (employeeCards.length ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + employeeCards.map(e =>
+          '<button type="button" class="btn btn-sm ' + (state.payrollEmployee === e.name ? 'btn-primary' : '') + '" data-act="filterEmployee" data-name="' + U.esc(e.name) + '">' +
+          U.esc(e.name) + ' <small style="opacity:.75">· ' + U.esc(e.position) + ' · ' + U.fmt(e.count) + ' catatan</small></button>').join('') + '</div>' :
+          '<div class="empty">Belum ada nama karyawan. Klik "+ Catat Gaji Harian" untuk menambah.</div>') +
+        '</div></div><br>' +
         '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
         '<button class="btn btn-sm" data-act="wageExcel">⬇ Excel</button>' +
         '<button class="btn btn-sm" data-act="wagePdf">⬇ PDF</button></span></div><div class="card-body">' +
@@ -1120,7 +1130,7 @@ Object.assign(window.Views, (function () {
         '<div class="field"><label>Potongan Telat Masuk (Rp)</label><input type="number" id="slipLate" min="0" step="1000" value="' + late + '"></div>' +
         '</div>' +
         '<div class="notice" style="margin-top:12px">Jabatan: <strong>' + U.esc(week.position || '-') + '</strong>. ' +
-        'Manager/Mandor/Angkat Junjung = pengawas pekerjaan; Pemborong Amplas = pelaksana amplas; Pemborong Packing = pelaksana packing.</div>' +
+        'Pilihan jabatan: Manager, Mandor, Angkat Junjung, Pemborong Amplas, Pemborong Packing.</div>' +
         '<div style="margin-top:14px">' + UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
@@ -1164,6 +1174,10 @@ Object.assign(window.Views, (function () {
 
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
+        if (act === 'filterEmployee') {
+          state.payrollEmployee = state.payrollEmployee === b.dataset.name ? '' : b.dataset.name;
+          App.refresh();
+        }
         if (act === 'printWage') {
           const w = DB.get('wages', b.dataset.id);
           if (w) printDocument(wageDailyHtml(w), 'Bukti gaji disiapkan untuk dicetak');

@@ -9,9 +9,9 @@ window.DB = (function () {
   const CAT_KEY = 'furniture_categories';
   const DEFAULT_CATEGORIES = ['Meja', 'Kursi', 'Lemari', 'Sofa', 'Rak', 'Tempat Tidur', 'Lainnya'];
   const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'boxes', 'users'];
-  const JOB_TITLES = ['Manager/Mandor/Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
+  const JOB_TITLES = ['Manager', 'Mandor', 'Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
   const WAGE_POSITIONS = {
-    'Rizky Prasetyo': JOB_TITLES[0], 'Sinta Wulandari': JOB_TITLES[1], 'Agus Saliman': JOB_TITLES[2]
+    'Rizky Prasetyo': 'Mandor', 'Sinta Wulandari': 'Pemborong Amplas', 'Agus Saliman': 'Pemborong Packing'
   };
   const OLD_PASSWORDS = {
     U1: 'admin123', U2: 'gudang123', U3: 'purchasing123', U4: 'produksi123', U5: 'manager123'
@@ -186,16 +186,16 @@ window.DB = (function () {
     });
 
     const wages = [
-      ['Rizky Prasetyo', 150000, 25000, 1, 2, -9, 'Lembur finishing kursi', JOB_TITLES[0]],
-      ['Sinta Wulandari', 140000, 20000, 1, 0, -9, '', JOB_TITLES[1]],
-      ['Agus Saliman', 160000, 25000, 1, 1, -8, 'Lembur perakitan', JOB_TITLES[2]],
-      ['Rizky Prasetyo', 150000, 25000, 1, 3, -7, 'Lembur pengiriman', JOB_TITLES[0]],
-      ['Sinta Wulandari', 140000, 20000, 1, 1, -6, '', JOB_TITLES[1]],
-      ['Agus Saliman', 160000, 25000, 1, 0, -5, '', JOB_TITLES[2]],
-      ['Rizky Prasetyo', 150000, 25000, 1, 2, -3, 'Lembur finishing', JOB_TITLES[0]],
-      ['Sinta Wulandari', 140000, 20000, 1, 0, -2, '', JOB_TITLES[1]],
-      ['Agus Saliman', 160000, 25000, 1, 2, -1, 'Lembur packing', JOB_TITLES[2]],
-      ['Rizky Prasetyo', 150000, 25000, 1, 1, 0, 'Masuk hari ini', JOB_TITLES[0]]
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -9, 'Lembur finishing kursi', 'Mandor'],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -9, '', 'Pemborong Amplas'],
+      ['Agus Saliman', 160000, 25000, 1, 1, -8, 'Lembur perakitan', 'Pemborong Packing'],
+      ['Rizky Prasetyo', 150000, 25000, 1, 3, -7, 'Lembur pengiriman', 'Mandor'],
+      ['Sinta Wulandari', 140000, 20000, 1, 1, -6, '', 'Pemborong Amplas'],
+      ['Agus Saliman', 160000, 25000, 1, 0, -5, '', 'Pemborong Packing'],
+      ['Rizky Prasetyo', 150000, 25000, 1, 2, -3, 'Lembur finishing', 'Mandor'],
+      ['Sinta Wulandari', 140000, 20000, 1, 0, -2, '', 'Pemborong Amplas'],
+      ['Agus Saliman', 160000, 25000, 1, 2, -1, 'Lembur packing', 'Pemborong Packing'],
+      ['Rizky Prasetyo', 150000, 25000, 1, 1, 0, 'Masuk hari ini', 'Mandor']
     ].map((w, i) => ({
       id: 'WG' + String(i + 1).padStart(3, '0'), date: d(w[5]), employee: w[0],
       dailyWage: w[1], overtimeRate: w[2], days: w[3], overtimeHours: w[4],
@@ -234,10 +234,14 @@ window.DB = (function () {
         changed = true;
       }
     });
-    // Data lama belum punya jabatan: isi otomatis dari nama karyawan bawaan.
+    // Data lama belum punya jabatan / masih memakai jabatan gabungan.
     if (Array.isArray(cache.wages)) {
       cache.wages.forEach(w => {
         if (!w.position && WAGE_POSITIONS[w.employee]) { w.position = WAGE_POSITIONS[w.employee]; changed = true; }
+        if (w.position === 'Manager/Mandor/Angkat Junjung') {
+          w.position = WAGE_POSITIONS[w.employee] || 'Mandor';
+          changed = true;
+        }
       });
     }
     if (changed) {
@@ -526,7 +530,7 @@ window.DB = (function () {
   const get = (name, id) => load()[name].find(x => x.id === id) || null;
   function insert(name, obj) {
     const db = load();
-    const row = Object.assign({ id: U.uid(name.slice(0, 3)), createdAt: new Date().toISOString() }, obj);
+    const row = Object.assign({ id: obj.id || U.uid(name.slice(0, 3)), createdAt: new Date().toISOString() }, obj);
     db[name].push(row); save();
     if (isSupabase()) queue(() => sb.from(name).insert(row), 'tambah ' + name);
     return row;
@@ -808,10 +812,10 @@ window.DB = (function () {
 
   const PERMS = {
     ADMIN: ['*'],
-    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'boxes.*', 'distributions.view', 'returns.*', 'qc.*', 'spk.view', 'borong.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
+    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'boxes.*', 'artisans.*', 'distributions.view', 'returns.*', 'qc.*', 'spk.view', 'borong.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
     PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'boxes.view', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
     PRODUKSI: ['dashboard', 'products.view', 'boxes.view', 'artisans.*', 'distributions.*', 'returns.view', 'qc.view', 'spk.*', 'borong.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
-    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'boxes.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'borong.view', 'borong.assign', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
+    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'boxes.view', 'artisans.*', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'borong.view', 'borong.assign', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
   };
   function can(perm) {
     const u = currentUser();

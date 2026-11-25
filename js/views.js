@@ -470,9 +470,9 @@ window.Views = (function () {
   window.artisanForm = function (existing) {
     UI.formModal({
       title: existing ? 'Edit Pengrajin' : 'Tambah Pengrajin', wide: true,
-      values: existing ? Object.assign({}, existing, { productTypes: (existing.productTypes || []).join(', ') }) : { active: true },
+      values: existing ? Object.assign({}, existing, { idManual: existing.id, productTypes: (existing.productTypes || []).join(', ') }) : { active: true },
       fields: [
-        { key: 'idManual', label: 'ID Pengrajin', value: existing ? existing.id : 'PN' + String(DB.all('artisans').length + 1).padStart(3, '0'), readonly: true },
+        { key: 'idManual', label: 'ID Pengrajin', type: existing ? 'readonly' : 'text', value: existing ? existing.id : 'PN' + String(DB.all('artisans').length + 1).padStart(3, '0'), required: true, hint: 'Boleh diisi sendiri saat tambah. ID tidak bisa diubah saat edit.' },
         { key: 'name', label: 'Nama Pengrajin', required: true },
         { key: 'address', label: 'Alamat', full: true },
         { key: 'phone', label: 'Nomor Telepon' },
@@ -482,9 +482,14 @@ window.Views = (function () {
         { key: 'notes', label: 'Catatan', type: 'textarea', full: true }
       ],
       onSubmit(data, close) {
-        data.productTypes = String(data.productTypes || '').split(',').map(s => s.trim()).filter(Boolean);
-        if (existing) { DB.update('artisans', existing.id, data); UI.toast('Pengrajin diperbarui', 'success'); }
-        else { DB.insert('artisans', data); UI.toast('Pengrajin ditambahkan', 'success'); }
+        const id = existing ? existing.id : String(data.idManual || '').trim().toUpperCase();
+        if (!id) { UI.toast('ID pengrajin wajib diisi', 'error'); return; }
+        if (!existing && DB.get('artisans', id)) { UI.toast('ID pengrajin ' + id + ' sudah dipakai', 'error'); return; }
+        const row = Object.assign({}, data, { id });
+        delete row.idManual;
+        row.productTypes = String(row.productTypes || '').split(',').map(s => s.trim()).filter(Boolean);
+        if (existing) { DB.update('artisans', existing.id, row); UI.toast('Pengrajin diperbarui', 'success'); }
+        else { DB.insert('artisans', row); UI.toast('Pengrajin ditambahkan: ' + id, 'success'); }
         close(); App.refresh();
       }
     });
