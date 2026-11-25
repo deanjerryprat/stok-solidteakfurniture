@@ -4,7 +4,7 @@ Panduan ini untuk menyambungkan **semua pembaruan terbaru** ke mode online:
 
 - Form **Distribusi & Tugas Borong**: ada **Admin yang Menangani** setelah tanggal.
 - Form **Tugas Borong Harian**: ada admin, karyawan yang dipegang (mis. Ulin), dan nama pemborong.
-- **Gaji Karyawan**: ada **Jabatan** (`Manager/Mandor/Angkat Junjung`, `Pemborong Amplas`, `Pemborong Packing`).
+- **Gaji Karyawan**: ada **Jabatan** (`Manager`, `Mandor`, `Angkat Junjung`, `Pemborong Amplas`, `Pemborong Packing`) dan daftar nama karyawan di atas catatan gaji harian.
 - Barang kembali dari **Borong Obat / Servis / Pinjaman Sampel** → QC → **Buat Masuk**.
 - Panel **Informasi Produksi & Gudang** dan **Pengawasan Harian** di dashboard/borong.
 
