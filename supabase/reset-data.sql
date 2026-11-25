@@ -18,6 +18,7 @@ truncate table
   public.spk,
   public.wages,
   public.borong,
+  public.boxes,
   public.products,
   public.artisans,
   public.users;
@@ -30,4 +31,5 @@ select 'products' tabel, count(*) from public.products
 union all select 'artisans', count(*) from public.artisans
 union all select 'users', count(*) from public.users
 union all select 'wages', count(*) from public.wages
-union all select 'borong', count(*) from public.borong;
+union all select 'borong', count(*) from public.borong
+union all select 'boxes', count(*) from public.boxes;

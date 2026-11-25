@@ -21,6 +21,7 @@ drop table if exists
   public.spk,
   public.wages,
   public.borong,
+  public.boxes,
   public.products,
   public.artisans,
   public.users
@@ -35,5 +36,5 @@ from information_schema.tables
 where table_schema = 'public'
   and table_name in (
     'products','artisans','inbound','outbound','distributions','returns',
-    'qc','spk','wages','borong','users'
+    'qc','spk','wages','borong','boxes','users'
   );

@@ -17,7 +17,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'products','artisans','inbound','outbound','distributions','returns','qc','spk','wages','borong','users'
+    'products','artisans','inbound','outbound','distributions','returns','qc','spk','wages','borong','boxes','users'
   ] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists app_all on public.%I', t);

@@ -26,6 +26,12 @@ alter table public.returns add column if not exists "partyName" text;
 -- 5. QC yang sudah dibuatkan barang masuk (mencegah stok dobel)
 alter table public.qc add column if not exists "inboundId" text;
 
+-- 6. Box: relasi ke barang di Database Produk
+-- Jalankan add-boxes.sql terlebih dahulu jika tabel boxes belum ada.
+alter table public.boxes add column if not exists "productId" text;
+alter table public.boxes add column if not exists "productSku" text;
+alter table public.boxes add column if not exists "productName" text;
+
 -- Pastikan role anon/authenticated tetap punya akses ke semua tabel,
 -- termasuk tabel borong yang mungkin baru dibuat.
 grant usage on schema public to anon, authenticated;
@@ -40,7 +46,7 @@ declare t text;
 begin
   foreach t in array array[
     'products','artisans','inbound','outbound','distributions','returns',
-    'qc','spk','wages','borong','users'
+    'qc','spk','wages','borong','boxes','users'
   ] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists app_all on public.%I', t);
@@ -70,5 +76,6 @@ where table_schema = 'public'
     or (table_name = 'borong' and column_name in ('handledById','handledByName','workerName'))
     or (table_name = 'wages' and column_name = 'position')
     or (table_name = 'returns' and column_name in ('source','partyName'))
-    or (table_name = 'qc' and column_name = 'inboundId'))
+    or (table_name = 'qc' and column_name = 'inboundId')
+    or (table_name = 'boxes' and column_name in ('productId','productSku','productName','code','sizeDetail','volumeM3','qty','minQty')))
 order by table_name, column_name;

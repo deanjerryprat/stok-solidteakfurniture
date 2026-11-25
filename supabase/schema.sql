@@ -155,6 +155,25 @@ create table if not exists public.borong (
   "createdAt" text
 );
 
+create table if not exists public.boxes (
+  id text primary key,
+  "productId" text,
+  "productSku" text,
+  "productName" text,
+  code text,
+  name text,
+  "sizeDetail" text,
+  "lengthCm" numeric default 0,
+  "widthCm" numeric default 0,
+  "heightCm" numeric default 0,
+  "volumeM3" numeric default 0,
+  qty numeric default 0,
+  "minQty" numeric default 0,
+  location text,
+  notes text,
+  "createdAt" text
+);
+
 create table if not exists public.users (
   id text primary key,
   username text unique not null,
@@ -188,6 +207,7 @@ alter table public.qc            enable row level security;
 alter table public.spk           enable row level security;
 alter table public.wages         enable row level security;
 alter table public.borong        enable row level security;
+alter table public.boxes         enable row level security;
 alter table public.users         enable row level security;
 
 drop policy if exists app_all on public.products;
@@ -200,6 +220,7 @@ drop policy if exists app_all on public.qc;
 drop policy if exists app_all on public.spk;
 drop policy if exists app_all on public.wages;
 drop policy if exists app_all on public.borong;
+drop policy if exists app_all on public.boxes;
 drop policy if exists app_all on public.users;
 
 create policy app_all on public.products      for all to anon, authenticated using (true) with check (true);
@@ -212,6 +233,7 @@ create policy app_all on public.qc            for all to anon, authenticated usi
 create policy app_all on public.spk           for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.wages         for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.borong        for all to anon, authenticated using (true) with check (true);
+create policy app_all on public.boxes         for all to anon, authenticated using (true) with check (true);
 create policy app_all on public.users         for all to anon, authenticated using (true) with check (true);
 
 -- ---------- FUNGSI LOGIN ----------
