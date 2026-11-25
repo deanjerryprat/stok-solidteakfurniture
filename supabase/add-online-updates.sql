@@ -55,12 +55,16 @@ begin
 end $$;
 
 -- Isi jabatan untuk data gaji lama yang belum punya jabatan
-update public.wages set "position" = 'Manager/Mandor/Angkat Junjung'
+update public.wages set "position" = 'Mandor'
   where ("position" is null or "position" = '') and employee = 'Rizky Prasetyo';
 update public.wages set "position" = 'Pemborong Amplas'
   where ("position" is null or "position" = '') and employee = 'Sinta Wulandari';
 update public.wages set "position" = 'Pemborong Packing'
   where ("position" is null or "position" = '') and employee = 'Agus Saliman';
+
+-- Jabatan gabungan lama dipecah ke pilihan baru
+update public.wages set "position" = 'Mandor'
+  where "position" = 'Manager/Mandor/Angkat Junjung';
 
 -- Data lama returns dianggap berasal dari pengrajin
 update public.returns set "source" = 'Pengrajin'
