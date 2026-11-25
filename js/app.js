@@ -9,7 +9,8 @@ window.App = (function () {
     { group: 'Gudang', items: [
       { key: 'products', label: 'Database Produk', icon: '📦', perm: 'products.view' },
       { key: 'inbound', label: 'Barang Masuk', icon: '📥', perm: 'inbound.view' },
-      { key: 'outbound', label: 'Barang Keluar', icon: '📤', perm: 'outbound.view' }
+      { key: 'outbound', label: 'Barang Keluar', icon: '📤', perm: 'outbound.view' },
+      { key: 'boxes', label: 'Stok Box & Kubikasi', icon: '📐', perm: 'boxes.view' }
     ]},
     { group: 'Produksi', items: [
       { key: 'artisans', label: 'Pengrajin', icon: '👷', perm: 'artisans.view' },

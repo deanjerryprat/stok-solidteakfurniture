@@ -8,7 +8,7 @@ window.DB = (function () {
   const BACKUP_KEY = 'furniture_backup_config';
   const CAT_KEY = 'furniture_categories';
   const DEFAULT_CATEGORIES = ['Meja', 'Kursi', 'Lemari', 'Sofa', 'Rak', 'Tempat Tidur', 'Lainnya'];
-  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'users'];
+  const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'boxes', 'users'];
   const JOB_TITLES = ['Manager/Mandor/Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
   const WAGE_POSITIONS = {
     'Rizky Prasetyo': JOB_TITLES[0], 'Sinta Wulandari': JOB_TITLES[1], 'Agus Saliman': JOB_TITLES[2]
@@ -573,6 +573,32 @@ window.DB = (function () {
     return out;
   }
 
+  /* ---------- Stok box & kubikasi ---------- */
+  function boxVolume(b) {
+    if (!b) return 0;
+    const manual = U.num(b.volumeM3);
+    if (manual > 0) return manual;
+    const p = U.num(b.lengthCm), l = U.num(b.widthCm), h = U.num(b.heightCm);
+    if (p <= 0 || l <= 0 || h <= 0) return 0;
+    return Math.round((p * l * h / 1000000) * 1000000) / 1000000;
+  }
+  function boxTotalM3(b) { return U.num(b.qty) * boxVolume(b); }
+  function boxSizeText(b) {
+    if (!b) return '-';
+    if (String(b.sizeDetail || '').trim()) return b.sizeDetail;
+    const p = U.num(b.lengthCm), l = U.num(b.widthCm), h = U.num(b.heightCm);
+    return (p || l || h) ? (p + ' x ' + l + ' x ' + h + ' cm') : '-';
+  }
+  function boxSummary() {
+    const rows = all('boxes');
+    return {
+      types: rows.length,
+      qty: U.sum(rows, b => U.num(b.qty)),
+      m3: U.sum(rows, b => boxTotalM3(b)),
+      low: rows.filter(b => U.num(b.qty) <= U.num(b.minQty)).length
+    };
+  }
+
   /* ---------- Gaji karyawan ---------- */
   function wageTotal(w) { return U.num(w.days) * U.num(w.dailyWage) + U.num(w.overtimeHours) * U.num(w.overtimeRate); }
   function payrollSummary(date) {
@@ -772,10 +798,10 @@ window.DB = (function () {
 
   const PERMS = {
     ADMIN: ['*'],
-    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'distributions.view', 'returns.*', 'qc.*', 'spk.view', 'borong.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
-    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
-    PRODUKSI: ['dashboard', 'products.view', 'artisans.*', 'distributions.*', 'returns.view', 'qc.view', 'spk.*', 'borong.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
-    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'borong.view', 'borong.assign', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
+    GUDANG: ['dashboard', 'products.view', 'inbound.*', 'outbound.*', 'boxes.*', 'distributions.view', 'returns.*', 'qc.*', 'spk.view', 'borong.*', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
+    PURCHASING: ['dashboard', 'products.view', 'inbound.*', 'boxes.view', 'reports.*', 'search', 'notifications', 'payroll.view', 'import.*'],
+    PRODUKSI: ['dashboard', 'products.view', 'boxes.view', 'artisans.*', 'distributions.*', 'returns.view', 'qc.view', 'spk.*', 'borong.*', 'reports.view', 'search', 'notifications', 'payroll.view'],
+    MANAGER: ['dashboard', 'products.view', 'inbound.view', 'outbound.view', 'boxes.view', 'artisans.view', 'distributions.view', 'returns.view', 'qc.view', 'spk.view', 'borong.view', 'borong.assign', 'reports.*', 'search', 'notifications', 'payroll.*', 'import.view']
   };
   function can(perm) {
     const u = currentUser();
@@ -793,6 +819,7 @@ window.DB = (function () {
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
     stock, totals, opsSummary, dailyWorkSummary, payrollSummary, payrollWeek, wageTotal,
+    boxVolume, boxTotalM3, boxSizeText, boxSummary,
     borongItemTotal, borongItemTarget, borongDone, borongTarget, borongTotal, borongSummary, borongWeek,
     artisanStats, distRemaining, validate,
     authenticate, currentUser, login, logout, can, hash, hashAsync, svgPhoto

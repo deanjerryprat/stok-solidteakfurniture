@@ -36,8 +36,10 @@ Object.assign(window.Views, (function () {
     payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '', payrollPosition: '',
     slipEmployee: '', slipWeek: '', slipBonus: 0, slipDebt: 0, slipLate: 0,
     borongQ: '', borongFrom: U.shiftDays(-30), borongTo: U.today(), borongEmployee: '', borongAdmin: '', borongType: '', monitorDate: U.today(),
-    slipBorongEmployee: '', slipBorongWeek: '', slipBorongExtra: 0
+    slipBorongEmployee: '', slipBorongWeek: '', slipBorongExtra: 0,
+    boxQ: ''
   };
+  const m3 = n => Number(U.num(n)).toLocaleString('id-ID', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
   /* ================= DISTRIBUSI ================= */
   window.openDistributionForm = function (existing, artisanId, spkId) {
@@ -140,6 +142,131 @@ Object.assign(window.Views, (function () {
         if (b.dataset.act === 'edit') window.openDistributionForm(x);
         if (b.dataset.act === 'delete') UI.confirm('Hapus distribusi ini? Barang akan kembali ke stok gudang.', () => {
           DB.remove('distributions', x.id); UI.toast('Dihapus', 'success'); App.refresh();
+        }, true);
+      }));
+    }
+  };
+
+  /* ================= STOK BOX & KUBIKASI ================= */
+  window.openBoxForm = function (existing) {
+    const values = existing || {
+      productId: '', productSku: '', productName: '',
+      code: '', name: '', sizeDetail: '', lengthCm: '', widthCm: '', heightCm: '',
+      volumeM3: '', qty: '', minQty: 0, location: '', notes: ''
+    };
+    UI.formModal({
+      title: existing ? 'Edit Box' : 'Tambah Box', wide: true, values,
+      notice: 'Pilih barang dari Database Produk yang akan dimuat ke dalam box. Ukuran detail diisi sendiri. Isi Panjang/Lebar/Tinggi (cm) untuk kubikasi otomatis, atau isi Kubikasi per box manual.',
+      fields: [
+        { key: 'productId', label: 'Barang yang Dimuat (Database Produk)', type: 'select', options: pOpts(), required: true, placeholder: '-- Pilih produk --', full: true },
+        { key: 'code', label: 'Kode Box', required: true, placeholder: 'mis. BX-001' },
+        { key: 'name', label: 'Nama / Jenis Box', required: true, placeholder: 'mis. Box Kursi 120' },
+        { key: 'sizeDetail', label: 'Ukuran Detail (teks bebas)', full: true, placeholder: 'mis. 120 x 60 x 45 cm, double wall' },
+        { key: 'lengthCm', label: 'Panjang (cm)', type: 'number', min: 0, step: '0.01', placeholder: '120' },
+        { key: 'widthCm', label: 'Lebar (cm)', type: 'number', min: 0, step: '0.01', placeholder: '60' },
+        { key: 'heightCm', label: 'Tinggi (cm)', type: 'number', min: 0, step: '0.01', placeholder: '45' },
+        { key: 'volumeM3', label: 'Kubikasi per Box (m³)', type: 'number', min: 0, step: '0.000001', placeholder: '0.324', hint: 'Kosongkan untuk dihitung otomatis dari P × L × T ÷ 1.000.000' },
+        { key: 'qty', label: 'Stok Box (pcs)', type: 'number', min: 0, required: true },
+        { key: 'minQty', label: 'Stok Minimum (pcs)', type: 'number', min: 0 },
+        { key: 'location', label: 'Lokasi', placeholder: 'mis. Gudang A' },
+        { key: 'notes', label: 'Catatan', type: 'textarea', full: true }
+      ],
+      onOpen() {
+        const recalc = () => {
+          const vol = U.$('#f_volumeM3');
+          if (!vol) return;
+          const prevAuto = U.num(vol.dataset.auto || 0);
+          const current = U.num(vol.value);
+          // Jangan timpa kubikasi yang diisi manual oleh user.
+          if (vol.value && Math.abs(current - prevAuto) > 1e-9) return;
+          const p = U.num(U.$('#f_lengthCm') && U.$('#f_lengthCm').value);
+          const l = U.num(U.$('#f_widthCm') && U.$('#f_widthCm').value);
+          const h = U.num(U.$('#f_heightCm') && U.$('#f_heightCm').value);
+          const v = (p > 0 && l > 0 && h > 0) ? Math.round((p * l * h / 1000000) * 1000000) / 1000000 : 0;
+          vol.value = v ? String(v) : '';
+          vol.dataset.auto = String(v);
+        };
+        ['lengthCm', 'widthCm', 'heightCm'].forEach(k => {
+          const el = U.$('#f_' + k);
+          if (el) el.addEventListener('input', recalc);
+        });
+      },
+      onSubmit(data, close) {
+        const prod = DB.get('products', data.productId);
+        if (!prod) { UI.toast('Pilih barang dari Database Produk terlebih dahulu', 'error'); return; }
+        const code = String(data.code || '').trim().toUpperCase();
+        const name = String(data.name || '').trim();
+        if (!code || !name) { UI.toast('Kode dan nama box wajib diisi', 'error'); return; }
+        const dup = DB.all('boxes').some(b => String(b.code || '').toUpperCase() === code && (!existing || b.id !== existing.id));
+        if (dup) { UI.toast('Kode box ' + code + ' sudah dipakai', 'error'); return; }
+        const row = {
+          productId: prod.id, productSku: prod.sku, productName: prod.name,
+          code, name,
+          sizeDetail: String(data.sizeDetail || '').trim(),
+          lengthCm: U.num(data.lengthCm), widthCm: U.num(data.widthCm), heightCm: U.num(data.heightCm),
+          volumeM3: U.num(data.volumeM3),
+          qty: U.num(data.qty), minQty: U.num(data.minQty),
+          location: String(data.location || '').trim(),
+          notes: String(data.notes || '').trim()
+        };
+        if (existing) DB.update('boxes', existing.id, row); else DB.insert('boxes', row);
+        UI.toast(existing ? 'Box diperbarui' : 'Box ditambahkan: ' + code, 'success');
+        close(); App.refresh();
+      }
+    });
+  };
+
+  const boxes = {
+    render() {
+      let rows = DB.all('boxes');
+      rows = filterRows(rows, state.boxQ, ['code', 'name', 'productSku', 'productName', 'sizeDetail', 'location', 'notes']);
+      rows.sort((a, b) => U.natCompare(String(a.code || ''), String(b.code || '')));
+      const s = DB.boxSummary();
+      return UI.pageHead('Stok Box & Kubikasi', 'Barang dipilih dari Database Produk. Ukuran detail diisi sendiri oleh gudang.',
+        can('boxes.create') ? '<button class="btn btn-primary" data-act="add">+ Tambah Box</button>' : '') +
+        '<div class="grid grid-stats">' +
+        UI.statCard({ label: 'Jenis Box', value: U.fmt(s.types), sub: 'terdaftar', icon: '📐' }) +
+        UI.statCard({ label: 'Total Stok Box', value: U.fmt(s.qty), sub: 'pcs', icon: '📦' }) +
+        UI.statCard({ label: 'Total Kubikasi', value: m3(s.m3), sub: 'm³', icon: '🧊' }) +
+        UI.statCard({ label: 'Box Menipis', value: U.fmt(s.low), sub: 'di bawah minimum', icon: '⚠️', accent: s.low ? 'bad' : '' }) +
+        '</div><br>' +
+        '<div class="toolbar"><input id="boxSearch" placeholder="Cari produk / kode / nama / ukuran / lokasi..." value="' + U.esc(state.boxQ) + '"></div>' +
+        '<div class="card"><div class="card-body">' + UI.table({
+          columns: [
+            { label: 'Barang', render: r => U.esc((r.productSku || pOf(r.productId).sku || '-') + ' — ' + (r.productName || pOf(r.productId).name || '-')) },
+            { label: 'Kode', render: r => '<strong>' + U.esc(r.code) + '</strong>' },
+            { label: 'Nama / Jenis', key: 'name' },
+            { label: 'Ukuran Detail', render: r => U.esc(DB.boxSizeText(r)) },
+            { label: 'Volume/Box', align: 'right', render: r => m3(DB.boxVolume(r)) + ' m³' },
+            { label: 'Stok', align: 'right', render: r => U.fmt(r.qty) + ' pcs' },
+            { label: 'Total Kubikasi', align: 'right', render: r => '<strong>' + m3(DB.boxTotalM3(r)) + ' m³</strong>' },
+            { label: 'Minimum', align: 'right', render: r => U.fmt(r.minQty) },
+            { label: 'Status', render: r => {
+              const low = U.num(r.qty) <= U.num(r.minQty);
+              return '<span class="badge badge-' + (low ? 'red' : 'green') + '">' + (low ? 'Menipis' : 'Aman') + '</span>';
+            } },
+            { label: 'Lokasi', render: r => U.esc(r.location || '-') }
+          ], rows,
+          actions: [
+            ...(can('boxes.update') ? [{ label: 'Edit', act: 'edit' }] : []),
+            ...(can('boxes.delete') ? [{ label: 'Hapus', act: 'delete', cls: 'danger' }] : [])
+          ],
+          empty: 'Belum ada box. Klik "+ Tambah Box" untuk mengisi ukuran dan stok.'
+        }) + '</div></div>';
+    },
+    bind(root) {
+      const search = U.$('#boxSearch', root);
+      if (search) search.addEventListener('input', e => {
+        state.boxQ = e.target.value; App.refresh();
+        const next = U.$('#boxSearch'); if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+      });
+      U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.act === 'add' && can('boxes.create')) { window.openBoxForm(); return; }
+        const x = DB.get('boxes', b.dataset.id);
+        if (!x) return;
+        if (b.dataset.act === 'edit' && can('boxes.update')) window.openBoxForm(x);
+        if (b.dataset.act === 'delete' && can('boxes.delete')) UI.confirm('Hapus box ' + x.code + ' — ' + x.name + '?', () => {
+          DB.remove('boxes', x.id); UI.toast('Dihapus', 'success'); App.refresh();
         }, true);
       }));
     }
@@ -604,6 +731,7 @@ Object.assign(window.Views, (function () {
     });
     DB.all('spk').filter(s => s.status === 'Selesai').forEach(s => out.push({ key: 'done_' + s.id, icon: '🎉', title: 'Pekerjaan selesai', text: s.no + ' — ' + pOf(s.productId).name, href: '#/spk', date: s.targetDate }));
     DB.all('products').filter(p => DB.stock(p.id).warehouse <= p.minStock).forEach(p => out.push({ key: 'low_' + p.id, icon: '📉', title: 'Stok menipis', text: p.name + ' tersisa ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs', href: '#/products', date: t() }));
+    DB.all('boxes').filter(b => U.num(b.qty) <= U.num(b.minQty)).forEach(b => out.push({ key: 'boxlow_' + b.id, icon: '📐', title: 'Stok box menipis', text: (b.productSku || pOf(b.productId).sku || b.code) + ' — ' + b.code + ' tersisa ' + U.fmt(b.qty) + ' pcs', href: '#/boxes', date: t() }));
     return out.sort((a, b) => b.date.localeCompare(a.date));
   }
   const notifications = {
@@ -1864,5 +1992,5 @@ Object.assign(window.Views, (function () {
   };
 
   notifications.alerts = alerts;
-  return { distributions, returns, spk, reports, search, notifications, users, settings, payroll, borong, import: importView };
+  return { distributions, boxes, returns, spk, reports, search, notifications, users, settings, payroll, borong, import: importView };
 })());
