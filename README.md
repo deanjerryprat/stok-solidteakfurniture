@@ -6,8 +6,9 @@ Data awal sudah terisi: **10 produk** dan **10 pengrajin**, lengkap dengan trans
 ## Cara menjalankan
 
 1. Buka folder ini.
-2. Klik dua kali `index.html` (Chrome / Edge).
-3. Login dengan salah satu akun demo:
+2. Klik dua kali `index.html` (Chrome / Edge). Ini **halaman login saja** — dashboard tidak ikut tampil di bawahnya.
+3. Setelah login berhasil, aplikasi otomatis berpindah ke `app.html` (dashboard). Tombol **Keluar** kembali ke `index.html`.
+4. Login dengan salah satu akun demo:
 
 | Username | Password | Role | Akses |
 |---|---|---|---|
@@ -73,7 +74,7 @@ Folder ini sudah berisi file statis (`index.html`, `styles.css`, folder `js`). T
    - Klik **Create repository**.
 
 3. Di halaman repository, klik **uploading an existing file** (atau tombol **Add file → Upload files**).
-   - Tarik (drag) **semua isi folder project** ke halaman itu: `index.html`, `styles.css`, `README.md`, folder `js/` (termasuk `config.js`), dan folder `supabase/`.
+   - Tarik (drag) **semua isi folder project** ke halaman itu: `index.html` (halaman login), `app.html` (dashboard), `styles.css`, `README.md`, folder `js/` (termasuk `config.js` dan `login.js`), dan folder `supabase/`.
    - Tunggu sampai selesai upload, lalu klik **Commit changes**.
 
 4. Buka tab **Settings** repository → sidebar **Pages**.
@@ -128,7 +129,8 @@ Pesan error sekarang akan menunjukkan penyebabnya. Cek berurutan:
 2. Pastikan **schema.sql di-Run sampai selesai tanpa error** di project yang sama dengan URL/key yang dipakai. Cek di **Table Editor** harus ada tabel `users`, `products`, `artisans`, `inbound`, `outbound`, `distributions`, `returns`, `qc`, `spk`.
 3. Key harus **Publishable** (`sb_publishable_...`) atau anon lama (`eyJ...`). Kalau terlanjur memakai **secret key** (`sb_secret_...`), aplikasi akan menolak dengan pesan khusus.
 4. Kalau pesannya menyebut **`relation "public.users" does not exist`** → SQL belum jalan / salah project. Kalau **`invalid API key`/`JWT`** → key salah. Kalau **`permission denied for table ...`** → role `anon` belum mendapat `GRANT`. Jalankan file **`supabase/fix-permission.sql`** di SQL Editor → Run (aman dijalankan berulang), lalu klik **Aktifkan Supabase** lagi. `schema.sql` terbaru sudah memuat GRANT ini untuk project baru.
-5. Jika sudah deploy, **deploy ulang** folder aplikasi setelah memperbarui `index.html`.
+5. Kalau koneksi tabel berhasil tapi **login gagal** dengan pesan **`function digest(text, unknown) does not exist`**, jalankan file **`supabase/fix-auth.sql`** di SQL Editor → Run. File itu memperbaiki `search_path` fungsi `authenticate()` agar menemukan `pgcrypto` di schema `extensions`, lalu memuat ulang cache PostgREST. Setelah itu refresh aplikasi.
+6. Jika sudah deploy, **deploy ulang** folder aplikasi setelah memperbarui file.
 
 ### Akun demo Supabase
 
@@ -158,4 +160,6 @@ js/views2.js    distribusi, barang kembali/QC, SPK, laporan, pencarian, notifika
 js/app.js       login, router hash, navigasi, hak akses
 supabase/schema.sql        tabel + GRANT + RLS + fungsi login + akun demo
 supabase/fix-permission.sql  perbaikan cepat error "permission denied" pada project lama
+supabase/fix-auth.sql        perbaikan cepat error login "digest does not exist" / fungsi authenticate
+js/login.js     logika halaman masuk, lalu alihkan ke app.html
 ```

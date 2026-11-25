@@ -179,7 +179,9 @@ create or replace function public.authenticate(p_username text, p_password text)
 returns table(id text, username text, name text, role text, active boolean)
 language plpgsql
 security definer
-set search_path = public
+-- pgcrypto di Supabase biasanya terpasang di schema "extensions", bukan public.
+-- Tanpa schema itu, digest() akan error: "function digest(text, unknown) does not exist".
+set search_path = public, extensions
 as $$
 begin
   return query

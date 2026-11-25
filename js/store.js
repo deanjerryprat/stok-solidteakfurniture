@@ -24,9 +24,11 @@ window.DB = (function () {
     return ('00000000' + (h >>> 0).toString(16)).slice(-8);
   }
   async function hashAsync(str) {
-    if (isSupabase() && window.crypto && window.crypto.subtle) {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('furn|' + str));
-      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (window.crypto && window.crypto.subtle) {
+      try {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('furn|' + str));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      } catch (e) { /* file:// atau browser lama: pakai hash lokal */ }
     }
     return hash(str);
   }
@@ -228,6 +230,19 @@ window.DB = (function () {
       throw new Error('Gagal terhubung: ' + msg);
     }
 
+    // Pastikan fungsi login di server benar-benar bisa dipanggil
+    const authTest = await client.rpc('authenticate', { p_username: '__cek__', p_password: '__cek__' });
+    if (authTest.error) {
+      const raw = String(authTest.error.message || JSON.stringify(authTest.error));
+      let msg = raw;
+      if (/digest/i.test(raw)) {
+        msg = 'Fungsilogin di Supabase error (digest tidak ditemukan). Jalankan isi supabase/fix-auth.sql di SQL Editor → Run. Detail: ' + raw;
+      } else if (/does not exist|42883|404/i.test(raw)) {
+        msg = 'Fungsi authenticate() belum ada. Jalankan seluruh isi supabase/schema.sql atau supabase/fix-auth.sql di SQL Editor → Run. Detail: ' + raw;
+      }
+      throw new Error('Koneksi berhasil, tapi login belum siap: ' + msg);
+    }
+
     const snapshot = JSON.parse(JSON.stringify(load()));
     sb = client; mode = 'supabase';
     localStorage.setItem(MODE_KEY, 'supabase'); saveConfig(cfg);
@@ -415,7 +430,11 @@ window.DB = (function () {
       return (data && data[0]) ? data[0] : null;
     }
     const u = load().users.find(x => x.username === String(username).toLowerCase().trim());
-    return (u && u.active && u.password === hash(password)) ? u : null;
+    if (!u || !u.active) return null;
+    const pass = String(password);
+    let sha = hash(pass);
+    try { sha = await hashAsync(pass); } catch (e) {}
+    return (u.password === hash(pass) || u.password === sha) ? u : null;
   }
   function currentUser() {
     try {

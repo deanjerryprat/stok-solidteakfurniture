@@ -61,9 +61,7 @@ window.App = (function () {
   }
 
   function render() {
-    if (!DB.currentUser()) { U.$('#loginScreen').hidden = false; U.$('#appShell').hidden = true; return; }
-    U.$('#loginScreen').hidden = true;
-    U.$('#appShell').hidden = false;
+    if (!DB.currentUser()) { location.replace('index.html'); return; }
     const u = DB.currentUser();
     const initials = u.name.split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase();
     U.$('#userChip').innerHTML = '<span class="avatar">' + U.esc(initials) + '</span><span><strong>' + U.esc(u.name) + '</strong><br><small style="color:var(--muted)">' + U.esc(u.role) + '</small></span>';
@@ -100,20 +98,9 @@ window.App = (function () {
       try { await DB.connectSupabase(DB.getConfig()); }
       catch (e) { console.warn('Supabase tidak tersambung, pakai mode lokal:', e); UI.toast('Supabase tidak tersambung: ' + e.message, 'warning'); }
     }
-    U.$('#loginForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      const btn = e.target.querySelector('button[type=submit]');
-      if (btn) { btn.disabled = true; btn.textContent = 'Memeriksa...'; }
-      try {
-        const u = await DB.authenticate(U.$('#loginUsername').value, U.$('#loginPassword').value);
-        if (!u) { UI.toast('Username atau password salah', 'error'); return; }
-        DB.login(u);
-        if (!location.hash || location.hash === '#/') location.hash = '#/dashboard';
-        render(); UI.toast('Selamat datang, ' + u.name + (DB.isSupabase() ? ' (Supabase)' : ''), 'success');
-      } catch (err) { UI.toast(err.message, 'error'); }
-      finally { if (btn) { btn.disabled = false; btn.textContent = 'Masuk'; } }
-    });
-    U.$('#logoutBtn').addEventListener('click', () => { DB.logout(); location.hash = '#/dashboard'; render(); });
+    // Halaman aplikasi hanya boleh dibuka setelah login
+    if (!DB.currentUser()) { location.replace('index.html'); return; }
+    U.$('#logoutBtn').addEventListener('click', () => { DB.logout(); location.replace('index.html'); });
     U.$('#menuToggle').addEventListener('click', () => U.$('#sidebar').classList.toggle('open'));
     U.$('#notifBtn').addEventListener('click', () => { location.hash = '#/notifications'; });
     U.$('#globalSearchInput').addEventListener('keydown', e => {
