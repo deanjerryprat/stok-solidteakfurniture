@@ -1,4 +1,4 @@
-/* store.js â€” database localStorage + mode Supabase (database bersama) */
+/* store.js - database localStorage + mode Supabase (database bersama) */
 window.DB = (function () {
   const KEY = 'furniture_stock_db_v1';
   const SESSION_KEY = 'furniture_session_v1';
@@ -65,16 +65,16 @@ window.DB = (function () {
     const t = U.today();
     const d = n => U.shiftDays(n);
     const products = [
-      ['ST001', 'Meja Makan Jati', 'Meja', '180 x 90 x 75 cm', 'Gudang', 10, 'ðŸª‘', '#dbeafe'],
-      ['ST002', 'Kursi Makan Jati', 'Kursi', '45 x 50 x 90 cm', 'Gudang', 20, 'ðŸª‘', '#dcfce7'],
-      ['ST003', 'Lemari Pakaian 3 Pintu', 'Lemari', '120 x 60 x 200 cm', 'Gudang', 5, 'ðŸšª', '#fef3c7'],
-      ['ST004', 'Sofa Minimalis 3 Seat', 'Sofa', '200 x 85 x 80 cm', 'Proses Obat', 5, 'ðŸ›‹ï¸', '#ede9fe'],
-      ['ST005', 'Dining Chair', 'Kursi', '48 x 52 x 85 cm', 'Proses Obat', 30, 'ðŸª‘', '#ffe4e6'],
-      ['ST006', 'Meja Kerja Kayu', 'Meja', '140 x 70 x 75 cm', 'Gudang', 10, 'ðŸªµ', '#e0f2fe'],
-      ['ST007', 'Rak Buku Susun', 'Rak', '90 x 35 x 180 cm', 'Gudang', 10, 'ðŸ“š', '#f1f5f9'],
-      ['ST008', 'Tempat Tidur Queen', 'Tempat Tidur', '160 x 200 x 90 cm', 'Proses Obat', 5, 'ðŸ›ï¸', '#fae8ff'],
-      ['ST009', 'Kursi Bar Jati', 'Kursi', '40 x 45 x 100 cm', 'Gudang', 15, 'ðŸª‘', '#ccfbf1'],
-      ['ST010', 'Meja Lipat Portable', 'Meja', '120 x 60 x 75 cm', 'Barang Jadi', 10, 'ðŸ“¦', '#fef9c3']
+      ['ST001', 'Meja Makan Jati', 'Meja', '180 x 90 x 75 cm', 'Gudang', 10, 'Kursi', '#dbeafe'],
+      ['ST002', 'Kursi Makan Jati', 'Kursi', '45 x 50 x 90 cm', 'Gudang', 20, 'Kursi', '#dcfce7'],
+      ['ST003', 'Lemari Pakaian 3 Pintu', 'Lemari', '120 x 60 x 200 cm', 'Gudang', 5, 'Pintu', '#fef3c7'],
+      ['ST004', 'Sofa Minimalis 3 Seat', 'Sofa', '200 x 85 x 80 cm', 'Proses Obat', 5, 'Sofa', '#ede9fe'],
+      ['ST005', 'Dining Chair', 'Kursi', '48 x 52 x 85 cm', 'Proses Obat', 30, 'Kursi', '#ffe4e6'],
+      ['ST006', 'Meja Kerja Kayu', 'Meja', '140 x 70 x 75 cm', 'Gudang', 10, 'Kayu', '#e0f2fe'],
+      ['ST007', 'Rak Buku Susun', 'Rak', '90 x 35 x 180 cm', 'Gudang', 10, 'Buku', '#f1f5f9'],
+      ['ST008', 'Tempat Tidur Queen', 'Tempat Tidur', '160 x 200 x 90 cm', 'Proses Obat', 5, 'Tempat Tidur', '#fae8ff'],
+      ['ST009', 'Kursi Bar Jati', 'Kursi', '40 x 45 x 100 cm', 'Gudang', 15, 'Kursi', '#ccfbf1'],
+      ['ST010', 'Meja Lipat Portable', 'Meja', '120 x 60 x 75 cm', 'Barang Jadi', 10, 'Produk', '#fef9c3']
     ].map((p, i) => ({
       id: 'P' + String(i + 1).padStart(3, '0'), sku: p[0], name: p[1], category: p[2], size: p[3],
       status: p[4], minStock: p[5], photo: svgPhoto(p[6], p[7]), notes: '',
@@ -417,7 +417,7 @@ window.DB = (function () {
       } else if (/jwt|apikey|unauthorized|401|invalid/i.test(raw)) {
         msg = 'Key ditolak. Pakai Publishable key (sb_publishable_...) atau anon key lama (eyJ...), bukan secret key. Detail: ' + raw;
       } else if (/permission denied for table/i.test(raw)) {
-        msg = 'Role anon belum punya hak akses tabel. Buka Supabase â†’ SQL Editor â†’ jalankan isi supabase/fix-permission.sql â†’ Run, lalu coba lagi. Atau jalankan ulang schema.sql terbaru yang sudah memuat GRANT. Detail: ' + raw;
+        msg = 'Role anon belum punya hak akses tabel. Buka Supabase -> SQL Editor -> jalankan isi supabase/fix-permission.sql -> Run, lalu coba lagi. Atau jalankan ulang schema.sql terbaru yang sudah memuat GRANT. Detail: ' + raw;
       } else if (/permission|42501|rls|row-level/i.test(raw)) {
         msg = 'Akses ditolak RLS/policy. Jalankan seluruh isi supabase/schema.sql sampai selesai, lalu coba lagi. Detail: ' + raw;
       }
@@ -430,9 +430,9 @@ window.DB = (function () {
       const raw = String(authTest.error.message || JSON.stringify(authTest.error));
       let msg = raw;
       if (/digest/i.test(raw)) {
-        msg = 'Fungsilogin di Supabase error (digest tidak ditemukan). Jalankan isi supabase/fix-auth.sql di SQL Editor â†’ Run. Detail: ' + raw;
+        msg = 'Fungsilogin di Supabase error (digest tidak ditemukan). Jalankan isi supabase/fix-auth.sql di SQL Editor -> Run. Detail: ' + raw;
       } else if (/does not exist|42883|404/i.test(raw)) {
-        msg = 'Fungsi authenticate() belum ada. Jalankan seluruh isi supabase/schema.sql atau supabase/fix-auth.sql di SQL Editor â†’ Run. Detail: ' + raw;
+        msg = 'Fungsi authenticate() belum ada. Jalankan seluruh isi supabase/schema.sql atau supabase/fix-auth.sql di SQL Editor -> Run. Detail: ' + raw;
       }
       throw new Error('Koneksi berhasil, tapi login belum siap: ' + msg);
     }
@@ -572,6 +572,37 @@ window.DB = (function () {
     db[name].forEach(row => { if (set.has(row.id)) Object.assign(row, patch); });
     save();
     if (isSupabase() && ids.length) queue(() => sb.from(name).update(patch).in('id', ids), 'update ' + ids.length + ' ' + name);
+  }
+  // Ubah ID/nama pengrajin dan semua riwayat yang mereferensikannya.
+  function renameArtisan(oldId, newId, newName) {
+    const from = String(oldId || '').trim();
+    const to = String(newId || '').trim().toUpperCase();
+    const nm = String(newName || '').trim();
+    if (!from || !to || !nm) return false;
+    if (to !== from && get('artisans', to)) return false;
+    const row = get('artisans', from);
+    if (!row) return false;
+    const patch = {};
+    if (to !== from) patch.id = to;
+    if (nm !== row.name) patch.name = nm;
+    if (!Object.keys(patch).length) return true;
+    Object.assign(row, patch);
+    save();
+    if (isSupabase()) queue(() => sb.from('artisans').update(patch).eq('id', from), 'update artisans');
+    if (to !== from) {
+      ['distributions', 'returns', 'spk'].forEach(name => {
+        const ids = all(name).filter(x => x.artisanId === from).map(x => x.id);
+        if (ids.length) updateMany(name, ids, { artisanId: to });
+      });
+    }
+    if (nm !== row.name || patch.name) {
+      const currentName = nm;
+      ['distributions', 'returns'].forEach(name => {
+        const ids = all(name).filter(x => x.artisanId === to).map(x => x.id);
+        if (ids.length) updateMany(name, ids, { artisanName: currentName });
+      });
+    }
+    return true;
   }
 
   /* ---------- Perhitungan stok otomatis ---------- */
@@ -714,7 +745,7 @@ window.DB = (function () {
     };
     const production = bucket(), qcPending = bucket(), sample = bucket(), borongObat = bucket(), servis = bucket(), warehouse = bucket();
     all('products').forEach(p => {
-      const s = stock(p.id), sku = p.sku + ' â€” ' + p.name;
+      const s = stock(p.id), sku = p.sku + ' - ' + p.name;
       add(production, sku, s.process, '#/distributions');
       add(qcPending, sku, s.qc, '#/returns');
       add(warehouse, sku, s.warehouse, '#/products');
@@ -724,7 +755,7 @@ window.DB = (function () {
     });
     const returned = bucket();
     all('returns').filter(r => !date || r.date === day).forEach(r => {
-      add(returned, (r.source || 'Pengrajin') + ' â€” ' + (r.productName || r.sku || '-'), r.goodQty || r.qty, '#/returns');
+      add(returned, (r.source || 'Pengrajin') + ' - ' + (r.productName || r.sku || '-'), r.goodQty || r.qty, '#/returns');
     });
     const qcDone = bucket();
     all('qc').filter(q => !date || q.date === day).forEach(q => {
@@ -854,7 +885,7 @@ window.DB = (function () {
   }
 
   return {
-    KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany, updateMany,
+    KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany, updateMany, renameArtisan,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
