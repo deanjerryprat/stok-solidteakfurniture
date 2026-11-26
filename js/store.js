@@ -1,4 +1,4 @@
-/* store.js — database localStorage + mode Supabase (database bersama) */
+/* store.js â€” database localStorage + mode Supabase (database bersama) */
 window.DB = (function () {
   const KEY = 'furniture_stock_db_v1';
   const SESSION_KEY = 'furniture_session_v1';
@@ -7,7 +7,6 @@ window.DB = (function () {
   const DISABLE_KEY = 'furniture_supabase_disabled';
   const BACKUP_KEY = 'furniture_backup_config';
   const CAT_KEY = 'furniture_categories';
-  const DEFAULT_CATEGORIES = ['Meja', 'Kursi', 'Lemari', 'Sofa', 'Rak', 'Tempat Tidur', 'Lainnya'];
   const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'boxes', 'users'];
   const JOB_TITLES = ['Manager', 'Mandor', 'Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
   const WAGE_POSITIONS = {
@@ -66,16 +65,16 @@ window.DB = (function () {
     const t = U.today();
     const d = n => U.shiftDays(n);
     const products = [
-      ['ST001', 'Meja Makan Jati', 'Meja', '180 x 90 x 75 cm', 'Gudang', 10, '🪑', '#dbeafe'],
-      ['ST002', 'Kursi Makan Jati', 'Kursi', '45 x 50 x 90 cm', 'Gudang', 20, '🪑', '#dcfce7'],
-      ['ST003', 'Lemari Pakaian 3 Pintu', 'Lemari', '120 x 60 x 200 cm', 'Gudang', 5, '🚪', '#fef3c7'],
-      ['ST004', 'Sofa Minimalis 3 Seat', 'Sofa', '200 x 85 x 80 cm', 'Proses Obat', 5, '🛋️', '#ede9fe'],
-      ['ST005', 'Dining Chair', 'Kursi', '48 x 52 x 85 cm', 'Proses Obat', 30, '🪑', '#ffe4e6'],
-      ['ST006', 'Meja Kerja Kayu', 'Meja', '140 x 70 x 75 cm', 'Gudang', 10, '🪵', '#e0f2fe'],
-      ['ST007', 'Rak Buku Susun', 'Rak', '90 x 35 x 180 cm', 'Gudang', 10, '📚', '#f1f5f9'],
-      ['ST008', 'Tempat Tidur Queen', 'Tempat Tidur', '160 x 200 x 90 cm', 'Proses Obat', 5, '🛏️', '#fae8ff'],
-      ['ST009', 'Kursi Bar Jati', 'Kursi', '40 x 45 x 100 cm', 'Gudang', 15, '🪑', '#ccfbf1'],
-      ['ST010', 'Meja Lipat Portable', 'Meja', '120 x 60 x 75 cm', 'Barang Jadi', 10, '📦', '#fef9c3']
+      ['ST001', 'Meja Makan Jati', 'Meja', '180 x 90 x 75 cm', 'Gudang', 10, 'ðŸª‘', '#dbeafe'],
+      ['ST002', 'Kursi Makan Jati', 'Kursi', '45 x 50 x 90 cm', 'Gudang', 20, 'ðŸª‘', '#dcfce7'],
+      ['ST003', 'Lemari Pakaian 3 Pintu', 'Lemari', '120 x 60 x 200 cm', 'Gudang', 5, 'ðŸšª', '#fef3c7'],
+      ['ST004', 'Sofa Minimalis 3 Seat', 'Sofa', '200 x 85 x 80 cm', 'Proses Obat', 5, 'ðŸ›‹ï¸', '#ede9fe'],
+      ['ST005', 'Dining Chair', 'Kursi', '48 x 52 x 85 cm', 'Proses Obat', 30, 'ðŸª‘', '#ffe4e6'],
+      ['ST006', 'Meja Kerja Kayu', 'Meja', '140 x 70 x 75 cm', 'Gudang', 10, 'ðŸªµ', '#e0f2fe'],
+      ['ST007', 'Rak Buku Susun', 'Rak', '90 x 35 x 180 cm', 'Gudang', 10, 'ðŸ“š', '#f1f5f9'],
+      ['ST008', 'Tempat Tidur Queen', 'Tempat Tidur', '160 x 200 x 90 cm', 'Proses Obat', 5, 'ðŸ›ï¸', '#fae8ff'],
+      ['ST009', 'Kursi Bar Jati', 'Kursi', '40 x 45 x 100 cm', 'Gudang', 15, 'ðŸª‘', '#ccfbf1'],
+      ['ST010', 'Meja Lipat Portable', 'Meja', '120 x 60 x 75 cm', 'Barang Jadi', 10, 'ðŸ“¦', '#fef9c3']
     ].map((p, i) => ({
       id: 'P' + String(i + 1).padStart(3, '0'), sku: p[0], name: p[1], category: p[2], size: p[3],
       status: p[4], minStock: p[5], photo: svgPhoto(p[6], p[7]), notes: '',
@@ -269,18 +268,22 @@ window.DB = (function () {
     scheduleBackup();
   }
 
-  /* ---------- Kategori produk ---------- */
-  // Kategori bawaan + kategori buatan user + kategori yang sudah dipakai produk.
+  /* ---------- Kategori produk (semua dibuat & dikelola manual) ---------- */
+  // Tidak ada kategori bawaan. Kategori lama yang masih dipakai produk
+  // diangkat sekali ke daftar kelolaan agar tetap bisa diubah/dihapus.
   function getCategories() {
     let extra = [];
     try { extra = JSON.parse(localStorage.getItem(CAT_KEY) || '[]') || []; } catch (e) { extra = []; }
     const used = all('products').map(p => String(p.category || '').trim()).filter(Boolean);
-    return Array.from(new Set(DEFAULT_CATEGORIES.concat(extra, used))).sort(U.natCompare);
+    const merged = Array.from(new Set(extra.concat(used)));
+    if (merged.length !== extra.length) {
+      try { localStorage.setItem(CAT_KEY, JSON.stringify(merged)); } catch (e) {}
+    }
+    return merged.sort(U.natCompare);
   }
   function saveCategories(list) {
     const clean = Array.from(new Set((list || []).map(c => String(c).trim()).filter(Boolean)));
-    const extra = clean.filter(c => DEFAULT_CATEGORIES.indexOf(c) < 0);
-    localStorage.setItem(CAT_KEY, JSON.stringify(extra));
+    try { localStorage.setItem(CAT_KEY, JSON.stringify(clean)); } catch (e) { U.toast('Gagal menyimpan kategori (penyimpanan penuh)', 'error'); }
     return getCategories();
   }
   function addCategory(name) {
@@ -294,13 +297,23 @@ window.DB = (function () {
     const clean = String(newName || '').trim();
     if (!clean || !oldName || clean === oldName) return false;
     if (getCategories().some(c => c !== oldName && c.toLowerCase() === clean.toLowerCase())) return false;
-    all('products').forEach(p => { if (p.category === oldName) update('products', p.id, { category: clean }); });
+    const ids = all('products').filter(p => p.category === oldName).map(p => p.id);
+    if (ids.length) updateMany('products', ids, { category: clean });
     saveCategories(getCategories().filter(c => c !== oldName).concat(clean));
     return true;
   }
-  function deleteCategory(name) {
-    if (all('products').some(p => p.category === name)) return false;
-    saveCategories(getCategories().filter(c => c !== name));
+  // name = kategori yang dihapus; replacement = kategori tujuan bila masih dipakai produk.
+  function deleteCategory(name, replacement) {
+    const clean = String(name || '').trim();
+    if (!clean) return false;
+    const next = String(replacement || '').trim();
+    const ids = all('products').filter(p => p.category === clean).map(p => p.id);
+    if (ids.length && !next) return false;
+    if (next && next !== clean) {
+      if (!getCategories().some(c => c.toLowerCase() === next.toLowerCase())) return false;
+      updateMany('products', ids, { category: next });
+    }
+    saveCategories(getCategories().filter(c => c !== clean));
     return true;
   }
 
@@ -404,7 +417,7 @@ window.DB = (function () {
       } else if (/jwt|apikey|unauthorized|401|invalid/i.test(raw)) {
         msg = 'Key ditolak. Pakai Publishable key (sb_publishable_...) atau anon key lama (eyJ...), bukan secret key. Detail: ' + raw;
       } else if (/permission denied for table/i.test(raw)) {
-        msg = 'Role anon belum punya hak akses tabel. Buka Supabase → SQL Editor → jalankan isi supabase/fix-permission.sql → Run, lalu coba lagi. Atau jalankan ulang schema.sql terbaru yang sudah memuat GRANT. Detail: ' + raw;
+        msg = 'Role anon belum punya hak akses tabel. Buka Supabase â†’ SQL Editor â†’ jalankan isi supabase/fix-permission.sql â†’ Run, lalu coba lagi. Atau jalankan ulang schema.sql terbaru yang sudah memuat GRANT. Detail: ' + raw;
       } else if (/permission|42501|rls|row-level/i.test(raw)) {
         msg = 'Akses ditolak RLS/policy. Jalankan seluruh isi supabase/schema.sql sampai selesai, lalu coba lagi. Detail: ' + raw;
       }
@@ -417,9 +430,9 @@ window.DB = (function () {
       const raw = String(authTest.error.message || JSON.stringify(authTest.error));
       let msg = raw;
       if (/digest/i.test(raw)) {
-        msg = 'Fungsilogin di Supabase error (digest tidak ditemukan). Jalankan isi supabase/fix-auth.sql di SQL Editor → Run. Detail: ' + raw;
+        msg = 'Fungsilogin di Supabase error (digest tidak ditemukan). Jalankan isi supabase/fix-auth.sql di SQL Editor â†’ Run. Detail: ' + raw;
       } else if (/does not exist|42883|404/i.test(raw)) {
-        msg = 'Fungsi authenticate() belum ada. Jalankan seluruh isi supabase/schema.sql atau supabase/fix-auth.sql di SQL Editor → Run. Detail: ' + raw;
+        msg = 'Fungsi authenticate() belum ada. Jalankan seluruh isi supabase/schema.sql atau supabase/fix-auth.sql di SQL Editor â†’ Run. Detail: ' + raw;
       }
       throw new Error('Koneksi berhasil, tapi login belum siap: ' + msg);
     }
@@ -552,6 +565,13 @@ window.DB = (function () {
     const set = new Set(ids);
     db[name] = db[name].filter(x => !set.has(x.id)); save();
     if (isSupabase() && ids.length) queue(() => sb.from(name).delete().in('id', ids), 'hapus ' + ids.length + ' ' + name);
+  }
+  function updateMany(name, ids, patch) {
+    const db = load();
+    const set = new Set(ids);
+    db[name].forEach(row => { if (set.has(row.id)) Object.assign(row, patch); });
+    save();
+    if (isSupabase() && ids.length) queue(() => sb.from(name).update(patch).in('id', ids), 'update ' + ids.length + ' ' + name);
   }
 
   /* ---------- Perhitungan stok otomatis ---------- */
@@ -694,7 +714,7 @@ window.DB = (function () {
     };
     const production = bucket(), qcPending = bucket(), sample = bucket(), borongObat = bucket(), servis = bucket(), warehouse = bucket();
     all('products').forEach(p => {
-      const s = stock(p.id), sku = p.sku + ' — ' + p.name;
+      const s = stock(p.id), sku = p.sku + ' â€” ' + p.name;
       add(production, sku, s.process, '#/distributions');
       add(qcPending, sku, s.qc, '#/returns');
       add(warehouse, sku, s.warehouse, '#/products');
@@ -704,7 +724,7 @@ window.DB = (function () {
     });
     const returned = bucket();
     all('returns').filter(r => !date || r.date === day).forEach(r => {
-      add(returned, (r.source || 'Pengrajin') + ' — ' + (r.productName || r.sku || '-'), r.goodQty || r.qty, '#/returns');
+      add(returned, (r.source || 'Pengrajin') + ' â€” ' + (r.productName || r.sku || '-'), r.goodQty || r.qty, '#/returns');
     });
     const qcDone = bucket();
     all('qc').filter(q => !date || q.date === day).forEach(q => {
@@ -834,7 +854,7 @@ window.DB = (function () {
   }
 
   return {
-    KEY, TABLES, DEFAULT_CATEGORIES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany,
+    KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany, updateMany,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
