@@ -1,4 +1,4 @@
-/* utils.js — helper umum (tanpa dependency wajib) */
+/* utils.js - helper umum (tanpa dependency wajib) */
 window.U = (function () {
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
