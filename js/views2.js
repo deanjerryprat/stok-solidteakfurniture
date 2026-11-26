@@ -1,10 +1,10 @@
-/* views2.js — Distribusi, Barang Kembali/QC, SPK, Laporan, Pencarian, Notifikasi, User */
+/* views2.js - Distribusi, Barang Kembali/QC, SPK, Laporan, Pencarian, Notifikasi, User */
 Object.assign(window.Views, (function () {
-  const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' — ' + p.name }));
+  const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' - ' + p.name }));
   const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pOf = id => DB.get('products', id) || {};
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
-  const adminOpts = () => DB.all('users').filter(u => u.active).map(u => ({ value: u.id, label: (u.name || u.username) + ' — ' + u.role }))
+  const adminOpts = () => DB.all('users').filter(u => u.active).map(u => ({ value: u.id, label: (u.name || u.username) + ' - ' + u.role }))
     .sort((a, b) => U.natCompare(a.label, b.label));
   const adminName = id => { const u = DB.get('users', id) || {}; return u.name || u.username || '-'; };
   const can = p => DB.can(p);
@@ -44,7 +44,7 @@ Object.assign(window.Views, (function () {
   /* ================= DISTRIBUSI ================= */
   window.openDistributionForm = function (existing, artisanId, spkId) {
     const dists = DB.all('distributions');
-    const spkOpts = DB.all('spk').map(s => ({ value: s.id, label: s.no + ' — ' + pOf(s.productId).name + ' (' + s.qty + ')' }));
+    const spkOpts = DB.all('spk').map(s => ({ value: s.id, label: s.no + ' - ' + pOf(s.productId).name + ' (' + s.qty + ')' }));
     const values = existing || {
       date: t(), handledById: (DB.currentUser() || {}).id || '', artisanId: artisanId || '', productId: '', qty: '',
       targetDate: U.shiftDays(7), spkId: spkId || '', proof: '', notes: ''
@@ -84,7 +84,7 @@ Object.assign(window.Views, (function () {
         });
         if (existing) DB.update('distributions', existing.id, row); else DB.insert('distributions', row);
         if (data.spkId) DB.update('spk', data.spkId, { status: 'Proses' });
-        UI.toast('Distribusi tercatat. Stok gudang → pengrajin: ' + U.fmt(row.qty) + ' pcs', 'success');
+        UI.toast('Distribusi tercatat. Stok gudang -> pengrajin: ' + U.fmt(row.qty) + ' pcs', 'success');
         close(); App.refresh();
       }
     });
@@ -102,7 +102,7 @@ Object.assign(window.Views, (function () {
       rows.sort((a, b) => b.date.localeCompare(a.date));
       return UI.pageHead('Distribusi & Tugas Borong', 'Pembagian pekerjaan pengrajin dan pemborong; stok gudang otomatis berkurang',
         (can('distributions.create') ? '<button class="btn btn-primary" data-act="add">+ Distribusi Barang</button>' : '') +
-        (can('borong.assign') || can('borong.create') ? '<button class="btn" data-act="assignBorong">🧹 Tugas Borong Harian</button>' : '')) +
+        (can('borong.assign') || can('borong.create') ? '<button class="btn" data-act="assignBorong">Tugas Borong Harian</button>' : '')) +
         '<div class="toolbar"><input id="dSearch" placeholder="Cari produk / admin / pengrajin..." value="' + U.esc(state.distSearch) + '">' +
         '<select id="dAdmin"><option value="">Semua admin</option>' + adminOpts().map(a => '<option value="' + a.value + '"' + (state.distAdmin === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') + '</select>' +
         '<select id="dArtisan"><option value="">Semua pengrajin</option>' + aOpts().map(a => '<option value="' + a.value + '"' + (state.distArtisan === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') + '</select>' +
@@ -165,7 +165,7 @@ Object.assign(window.Views, (function () {
         { key: 'lengthCm', label: 'Panjang (cm)', type: 'number', min: 0, step: '0.01', placeholder: '120' },
         { key: 'widthCm', label: 'Lebar (cm)', type: 'number', min: 0, step: '0.01', placeholder: '60' },
         { key: 'heightCm', label: 'Tinggi (cm)', type: 'number', min: 0, step: '0.01', placeholder: '45' },
-        { key: 'volumeM3', label: 'Kubikasi per Box (m³)', type: 'number', min: 0, step: '0.000001', placeholder: '0.324', hint: 'Kosongkan untuk dihitung otomatis dari P × L × T ÷ 1.000.000' },
+        { key: 'volumeM3', label: 'Kubikasi per Box (m3)', type: 'number', min: 0, step: '0.000001', placeholder: '0.324', hint: 'Kosongkan untuk dihitung otomatis dari P x L x T / 1.000.000' },
         { key: 'qty', label: 'Stok Box (pcs)', type: 'number', min: 0, required: true },
         { key: 'minQty', label: 'Stok Minimum (pcs)', type: 'number', min: 0 },
         { key: 'location', label: 'Lokasi', placeholder: 'mis. Gudang A' },
@@ -225,21 +225,21 @@ Object.assign(window.Views, (function () {
       return UI.pageHead('Stok Box & Kubikasi', 'Barang dipilih dari Database Produk. Ukuran detail diisi sendiri oleh gudang.',
         can('boxes.create') ? '<button class="btn btn-primary" data-act="add">+ Tambah Box</button>' : '') +
         '<div class="grid grid-stats">' +
-        UI.statCard({ label: 'Jenis Box', value: U.fmt(s.types), sub: 'terdaftar', icon: '📐' }) +
-        UI.statCard({ label: 'Total Stok Box', value: U.fmt(s.qty), sub: 'pcs', icon: '📦' }) +
-        UI.statCard({ label: 'Total Kubikasi', value: m3(s.m3), sub: 'm³', icon: '🧊' }) +
-        UI.statCard({ label: 'Box Menipis', value: U.fmt(s.low), sub: 'di bawah minimum', icon: '⚠️', accent: s.low ? 'bad' : '' }) +
+        UI.statCard({ label: 'Jenis Box', value: U.fmt(s.types), sub: 'terdaftar', icon: 'Box' }) +
+        UI.statCard({ label: 'Total Stok Box', value: U.fmt(s.qty), sub: 'pcs', icon: 'Produk' }) +
+        UI.statCard({ label: 'Total Kubikasi', value: m3(s.m3), sub: 'm3', icon: 'Box' }) +
+        UI.statCard({ label: 'Box Menipis', value: U.fmt(s.low), sub: 'di bawah minimum', icon: 'Perhatian', accent: s.low ? 'bad' : '' }) +
         '</div><br>' +
         '<div class="toolbar"><input id="boxSearch" placeholder="Cari produk / kode / nama / ukuran / lokasi..." value="' + U.esc(state.boxQ) + '"></div>' +
         '<div class="card"><div class="card-body">' + UI.table({
           columns: [
-            { label: 'Barang', render: r => U.esc((r.productSku || pOf(r.productId).sku || '-') + ' — ' + (r.productName || pOf(r.productId).name || '-')) },
+            { label: 'Barang', render: r => U.esc((r.productSku || pOf(r.productId).sku || '-') + ' - ' + (r.productName || pOf(r.productId).name || '-')) },
             { label: 'Kode', render: r => '<strong>' + U.esc(r.code) + '</strong>' },
             { label: 'Nama / Jenis', key: 'name' },
             { label: 'Ukuran Detail', render: r => U.esc(DB.boxSizeText(r)) },
-            { label: 'Volume/Box', align: 'right', render: r => m3(DB.boxVolume(r)) + ' m³' },
+            { label: 'Volume/Box', align: 'right', render: r => m3(DB.boxVolume(r)) + ' m3' },
             { label: 'Stok', align: 'right', render: r => U.fmt(r.qty) + ' pcs' },
-            { label: 'Total Kubikasi', align: 'right', render: r => '<strong>' + m3(DB.boxTotalM3(r)) + ' m³</strong>' },
+            { label: 'Total Kubikasi', align: 'right', render: r => '<strong>' + m3(DB.boxTotalM3(r)) + ' m3</strong>' },
             { label: 'Minimum', align: 'right', render: r => U.fmt(r.minQty) },
             { label: 'Status', render: r => {
               const low = U.num(r.qty) <= U.num(r.minQty);
@@ -265,7 +265,7 @@ Object.assign(window.Views, (function () {
         const x = DB.get('boxes', b.dataset.id);
         if (!x) return;
         if (b.dataset.act === 'edit' && can('boxes.update')) window.openBoxForm(x);
-        if (b.dataset.act === 'delete' && can('boxes.delete')) UI.confirm('Hapus box ' + x.code + ' — ' + x.name + '?', () => {
+        if (b.dataset.act === 'delete' && can('boxes.delete')) UI.confirm('Hapus box ' + x.code + ' - ' + x.name + '?', () => {
           DB.remove('boxes', x.id); UI.toast('Dihapus', 'success'); App.refresh();
         }, true);
       }));
@@ -279,7 +279,7 @@ Object.assign(window.Views, (function () {
       return rem > 0 || (existing && d.id === existing.distributionId);
     }).map(d => ({
       value: d.id,
-      label: d.artisanName + ' — ' + d.productName + ' (sisa ' + DB.distRemaining(d.id) + ')'
+      label: d.artisanName + ' - ' + d.productName + ' (sisa ' + DB.distRemaining(d.id) + ')'
     }));
     UI.formModal({
       title: existing ? 'Edit Penerimaan Barang' : 'Terima Barang Kembali dari Pengrajin', wide: true,
@@ -321,7 +321,7 @@ Object.assign(window.Views, (function () {
       values: existing || { date: t(), productId: pending[0] ? pending[0].id : '', qty: '', passedQty: '', rejectedQty: 0 },
       fields: [
         { key: 'date', label: 'Tanggal QC', type: 'date', required: true },
-        { key: 'productId', label: 'Produk (sedang menunggu QC)', type: 'select', options: pending.map(p => ({ value: p.id, label: p.sku + ' — ' + p.name + ' (pending ' + DB.stock(p.id).qc + ')' })), required: true, full: true },
+        { key: 'productId', label: 'Produk (sedang menunggu QC)', type: 'select', options: pending.map(p => ({ value: p.id, label: p.sku + ' - ' + p.name + ' (pending ' + DB.stock(p.id).qc + ')' })), required: true, full: true },
         { key: 'qty', label: 'Jumlah Diperiksa', type: 'number', min: 1, required: true },
         { key: 'passedQty', label: 'Jumlah Lulus', type: 'number', min: 0, required: true },
         { key: 'rejectedQty', label: 'Jumlah Afkir', type: 'number', min: 0, value: 0 },
@@ -547,7 +547,7 @@ Object.assign(window.Views, (function () {
       rows = filterRows(rows, state.spkSearch, ['no', 'status', 'notes'])
         .filter(s => !state.reportStatus || s.status === state.reportStatus);
       rows.sort((a, b) => b.date.localeCompare(a.date));
-      return UI.pageHead('SPK — Surat Perintah Kerja', 'Perintah kerja produksi untuk pengrajin',
+      return UI.pageHead('SPK - Surat Perintah Kerja', 'Perintah kerja produksi untuk pengrajin',
         (can('spk.create') ? '<button class="btn btn-primary" data-act="add">+ Buat SPK</button>' : '')) +
         '<div class="toolbar"><input id="sSearch" placeholder="Cari nomor SPK / catatan..." value="' + U.esc(state.spkSearch) + '">' +
         '<select id="sStatus"><option value="">Semua status</option>' + ['Proses', 'Selesai', 'Terlambat'].map(s => '<option' + (state.reportStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
@@ -658,7 +658,7 @@ Object.assign(window.Views, (function () {
       const rows = reportRows();
       const title = { masuk: 'Laporan Barang Masuk', keluar: 'Laporan Barang Keluar', stok: 'Laporan Stok Keseluruhan', pengrajin: 'Laporan Per Pengrajin' }[state.reportTab];
       return UI.pageHead('Laporan', 'Filter tanggal, produk, kategori, pengrajin & status',
-        '<button class="btn" data-act="excel">⬇ Export Excel</button><button class="btn" data-act="pdf">⬇ Export PDF</button>') +
+        '<button class="btn" data-act="excel"> Export Excel</button><button class="btn" data-act="pdf"> Export PDF</button>') +
         '<div class="tabs">' + [['masuk', 'Barang Masuk'], ['keluar', 'Barang Keluar'], ['stok', 'Stok Keseluruhan'], ['pengrajin', 'Per Pengrajin']].map(x =>
           '<button class="tab ' + (state.reportTab === x[0] ? 'active' : '') + '" data-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
         '<div class="toolbar"><label>Dari <input type="date" id="rFrom" value="' + U.esc(state.from) + '"></label>' +
@@ -693,18 +693,18 @@ Object.assign(window.Views, (function () {
       const s = q.toLowerCase();
       const match = obj => Object.values(obj).some(v => typeof v !== 'object' && String(v || '').toLowerCase().includes(s));
       const groups = [
-        ['Produk', U.sortBySKU(DB.all('products')).filter(match), '#/products', p => p.name + ' · ' + p.sku],
-        ['Pengrajin', U.sortByName(DB.all('artisans')).filter(match), '#/artisans', a => a.name + ' · ' + a.id],
-        ['Barang Masuk', DB.all('inbound').filter(match), '#/inbound', x => x.productName + ' · ' + x.qty + ' pcs'],
-        ['Barang Keluar', DB.all('outbound').filter(match), '#/outbound', x => x.productName + ' · ' + x.qty + ' pcs'],
-        ['Distribusi', DB.all('distributions').filter(match), '#/distributions', x => x.artisanName + ' · ' + x.productName],
-        ['Barang Kembali', DB.all('returns').filter(match), '#/returns', x => x.artisanName + ' · ' + x.qty + ' pcs'],
-        ['SPK', DB.all('spk').filter(match), '#/spk', x => x.no + ' · ' + x.status]
+        ['Produk', U.sortBySKU(DB.all('products')).filter(match), '#/products', p => p.name + '  |  ' + p.sku],
+        ['Pengrajin', U.sortByName(DB.all('artisans')).filter(match), '#/artisans', a => a.name + '  |  ' + a.id],
+        ['Barang Masuk', DB.all('inbound').filter(match), '#/inbound', x => x.productName + '  |  ' + x.qty + ' pcs'],
+        ['Barang Keluar', DB.all('outbound').filter(match), '#/outbound', x => x.productName + '  |  ' + x.qty + ' pcs'],
+        ['Distribusi', DB.all('distributions').filter(match), '#/distributions', x => x.artisanName + '  |  ' + x.productName],
+        ['Barang Kembali', DB.all('returns').filter(match), '#/returns', x => x.artisanName + '  |  ' + x.qty + ' pcs'],
+        ['SPK', DB.all('spk').filter(match), '#/spk', x => x.no + '  |  ' + x.status]
       ];
       return UI.pageHead('Pencarian', 'Hasil untuk: "' + U.esc(q || '-') + '"', '') +
         '<div class="toolbar"><input id="qSearch" style="flex:1" placeholder="Cari SKU, nama produk, pengrajin, atau tanggal..." value="' + U.esc(q) + '"></div>' +
         groups.map(g => '<div class="card" style="margin-bottom:12px"><div class="card-head"><h3>' + g[0] + ' (' + g[1].length + ')</h3></div><div class="card-body">' +
-          (g[1].length ? g[1].slice(0, 8).map(x => '<div class="timeline-item"><span>🔎</span><div><a href="' + g[2] + (g[0] === 'Pengrajin' ? '/' + x.id : '') + '">' + U.esc(g[3](x)) + '</a><br><small>' + U.dateID(x.date || x.createdAt) + '</small></div></div>').join('') :
+          (g[1].length ? g[1].slice(0, 8).map(x => '<div class="timeline-item"><span>Cari</span><div><a href="' + g[2] + (g[0] === 'Pengrajin' ? '/' + x.id : '') + '">' + U.esc(g[3](x)) + '</a><br><small>' + U.dateID(x.date || x.createdAt) + '</small></div></div>').join('') :
             '<div style="color:var(--muted)">Tidak ada hasil</div>') + '</div></div>').join('');
     },
     bind(root) {
@@ -721,17 +721,17 @@ Object.assign(window.Views, (function () {
     const out = [];
     DB.all('distributions').forEach(d => {
       const rem = DB.distRemaining(d.id);
-      if (d.targetDate < t() && rem > 0) out.push({ key: 'late_' + d.id, icon: '🕒', title: 'Pekerjaan terlambat', text: aName(d.artisanId) + ' — ' + d.productName + ' sisa ' + U.fmt(rem) + ' pcs (target ' + U.dateID(d.targetDate) + ')', href: '#/artisans/' + d.artisanId, date: d.targetDate });
-      else if (d.targetDate >= t() && d.targetDate <= U.shiftDays(3) && rem > 0) out.push({ key: 'soon_' + d.id, icon: '⏰', title: 'Mendekati deadline', text: aName(d.artisanId) + ' — ' + d.productName + ' target ' + U.dateID(d.targetDate), href: '#/distributions', date: d.targetDate });
+      if (d.targetDate < t() && rem > 0) out.push({ key: 'late_' + d.id, icon: 'Deadline', title: 'Pekerjaan terlambat', text: aName(d.artisanId) + ' - ' + d.productName + ' sisa ' + U.fmt(rem) + ' pcs (target ' + U.dateID(d.targetDate) + ')', href: '#/artisans/' + d.artisanId, date: d.targetDate });
+      else if (d.targetDate >= t() && d.targetDate <= U.shiftDays(3) && rem > 0) out.push({ key: 'soon_' + d.id, icon: 'Deadline', title: 'Mendekati deadline', text: aName(d.artisanId) + ' - ' + d.productName + ' target ' + U.dateID(d.targetDate), href: '#/distributions', date: d.targetDate });
     });
     DB.all('returns').forEach(r => {
       const pending = r.goodQty - U.sum(DB.all('qc').filter(q => q.productId === r.productId), q => q.qty);
-      if (pending > 0) out.push({ key: 'qc_' + r.id, icon: '🔍', title: 'Barang perlu QC', text: r.artisanName + ' mengirim ' + U.fmt(r.goodQty) + ' pcs ' + r.productName, href: '#/returns', date: r.date });
-      else out.push({ key: 'sent_' + r.id, icon: '✅', title: 'Pengrajin kirim barang', text: r.artisanName + ' — ' + r.productName + ' (' + U.fmt(r.qty) + ' pcs) diterima', href: '#/returns', date: r.date });
+      if (pending > 0) out.push({ key: 'qc_' + r.id, icon: 'Cari', title: 'Barang perlu QC', text: r.artisanName + ' mengirim ' + U.fmt(r.goodQty) + ' pcs ' + r.productName, href: '#/returns', date: r.date });
+      else out.push({ key: 'sent_' + r.id, icon: 'Selesai', title: 'Pengrajin kirim barang', text: r.artisanName + ' - ' + r.productName + ' (' + U.fmt(r.qty) + ' pcs) diterima', href: '#/returns', date: r.date });
     });
-    DB.all('spk').filter(s => s.status === 'Selesai').forEach(s => out.push({ key: 'done_' + s.id, icon: '🎉', title: 'Pekerjaan selesai', text: s.no + ' — ' + pOf(s.productId).name, href: '#/spk', date: s.targetDate }));
-    DB.all('products').filter(p => DB.stock(p.id).warehouse <= p.minStock).forEach(p => out.push({ key: 'low_' + p.id, icon: '📉', title: 'Stok menipis', text: p.name + ' tersisa ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs', href: '#/products', date: t() }));
-    DB.all('boxes').filter(b => U.num(b.qty) <= U.num(b.minQty)).forEach(b => out.push({ key: 'boxlow_' + b.id, icon: '📐', title: 'Stok box menipis', text: (b.productSku || pOf(b.productId).sku || b.code) + ' — ' + b.code + ' tersisa ' + U.fmt(b.qty) + ' pcs', href: '#/boxes', date: t() }));
+    DB.all('spk').filter(s => s.status === 'Selesai').forEach(s => out.push({ key: 'done_' + s.id, icon: '', title: 'Pekerjaan selesai', text: s.no + ' - ' + pOf(s.productId).name, href: '#/spk', date: s.targetDate }));
+    DB.all('products').filter(p => DB.stock(p.id).warehouse <= p.minStock).forEach(p => out.push({ key: 'low_' + p.id, icon: 'Menipis', title: 'Stok menipis', text: p.name + ' tersisa ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs', href: '#/products', date: t() }));
+    DB.all('boxes').filter(b => U.num(b.qty) <= U.num(b.minQty)).forEach(b => out.push({ key: 'boxlow_' + b.id, icon: 'Box', title: 'Stok box menipis', text: (b.productSku || pOf(b.productId).sku || b.code) + ' - ' + b.code + ' tersisa ' + U.fmt(b.qty) + ' pcs', href: '#/boxes', date: t() }));
     return out.sort((a, b) => b.date.localeCompare(a.date));
   }
   const notifications = {
@@ -739,11 +739,11 @@ Object.assign(window.Views, (function () {
       const list = alerts(), read = readList();
       const unread = list.filter(a => !read.includes(a.key)).length;
       return UI.pageHead('Notifikasi Otomatis', unread + ' belum dibaca dari ' + list.length + ' notifikasi',
-        '<button class="btn" data-act="readAll">✓ Tandai semua dibaca</button>') +
+        '<button class="btn" data-act="readAll"> Tandai semua dibaca</button>') +
         '<div class="card"><div class="card-body">' + (list.length ? list.map(a =>
           '<div class="timeline-item" style="opacity:' + (read.includes(a.key) ? '.55' : '1') + '"><span>' + a.icon + '</span><div style="flex:1">' +
           '<strong>' + U.esc(a.title) + '</strong> ' + (read.includes(a.key) ? '' : '<span class="badge badge-blue">Baru</span>') +
-          '<div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + ' · <a href="' + a.href + '">Lihat detail</a></small></div>' +
+          '<div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + '  |  <a href="' + a.href + '">Lihat detail</a></small></div>' +
           '<button class="link-btn" data-act="read" data-key="' + U.esc(a.key) + '">Tandai dibaca</button></div>').join('') :
           '<div class="empty">Belum ada notifikasi</div>') + '</div></div>';
     },
@@ -777,7 +777,7 @@ Object.assign(window.Views, (function () {
         '<div class="card card-body" style="margin-top:14px"><strong>Hak akses:</strong><br>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
         ['ADMIN', 'GUDANG', 'PURCHASING', 'PRODUKSI', 'MANAGER'].map(r => '<span class="badge badge-blue">' + r + '</span>').join('') +
-        '</div><small style="color:var(--muted);display:block;margin-top:8px">ADMIN: penuh · GUDANG: masuk/keluar/stok · PURCHASING: supplier & masuk · PRODUKSI: distribusi & pengrajin · MANAGER: lihat dashboard & laporan.</small></div>';
+        '</div><small style="color:var(--muted);display:block;margin-top:8px">ADMIN: penuh  |  GUDANG: masuk/keluar/stok  |  PURCHASING: supplier & masuk  |  PRODUKSI: distribusi & pengrajin  |  MANAGER: lihat dashboard & laporan.</small></div>';
     },
     bind(root) {
       const roles = ['ADMIN', 'GUDANG', 'PURCHASING', 'PRODUKSI', 'MANAGER'];
@@ -819,40 +819,40 @@ Object.assign(window.Views, (function () {
       const bk = DB.getBackupConfig() || {};
       const online = DB.isSupabase();
       return UI.pageHead('Pengaturan Database', 'Hubungkan aplikasi ke Supabase (database bersama gratis)',
-        online ? '<span class="badge badge-green">● MODE SUPABASE</span>' : '<span class="badge badge-yellow">● MODE LOKAL</span>') +
+        online ? '<span class="badge badge-green"> MODE SUPABASE</span>' : '<span class="badge badge-yellow"> MODE LOKAL</span>') +
         '<div class="card"><div class="card-head"><h3>Koneksi Supabase</h3></div><div class="card-body">' +
-        '<div class="notice">Status saat ini: <strong>' + (online ? 'Terhubung ke Supabase — data bersama lintas perangkat & user' : 'Data tersimpan di browser perangkat ini saja') + '</strong></div><br>' +
+        '<div class="notice">Status saat ini: <strong>' + (online ? 'Terhubung ke Supabase - data bersama lintas perangkat & user' : 'Data tersimpan di browser perangkat ini saja') + '</strong></div><br>' +
         '<div class="form-grid">' +
         '<div class="field full"><label>Project URL</label><input id="sbUrl" placeholder="https://xxxxxxxx.supabase.co" value="' + U.esc(cfg.url || '') + '"></div>' +
-        '<div class="field full"><label>Publishable / anon / public key</label><input id="sbKey" placeholder="sb_publishable_... atau eyJhbGciOi..." value="' + U.esc(cfg.key || '') + '"><div class="hint">Ambil dari tombol Connect atau Settings → API Keys. Jangan pakai secret key (sb_secret_...).</div></div>' +
+        '<div class="field full"><label>Publishable / anon / public key</label><input id="sbKey" placeholder="sb_publishable_... atau eyJhbGciOi..." value="' + U.esc(cfg.key || '') + '"><div class="hint">Ambil dari tombol Connect atau Settings -> API Keys. Jangan pakai secret key (sb_secret_...).</div></div>' +
         '</div><div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn btn-primary" id="sbConnect">Aktifkan Supabase</button>' +
-        '<button class="btn" id="sbSync"' + (online ? '' : ' disabled') + '>🔄 Tarik data terbaru</button>' +
+        '<button class="btn" id="sbSync"' + (online ? '' : ' disabled') + '>Tarik data terbaru</button>' +
         '<button class="btn btn-warning" id="sbLocal"' + (online ? '' : ' disabled') + '>Kembali ke mode lokal</button>' +
         '</div></div></div><br>' +
         '<div class="card"><div class="card-head"><h3>Langkah persiapan (sekali saja)</h3></div><div class="card-body">' +
         '<ol style="line-height:1.9;margin:0;padding-left:20px">' +
         '<li>Buat project gratis di <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a>.</li>' +
-        '<li>Buka <strong>SQL Editor</strong> → <strong>New query</strong> → jalankan <code>supabase/schema.sql</code> untuk project baru, atau untuk project lama jalankan berurutan: <code>fix-auth.sql</code>, <code>fix-permission.sql</code>, <code>add-wages.sql</code>, <code>add-borong.sql</code>, <code>add-online-updates.sql</code>, <code>update-passwords.sql</code>. Detail ada di <code>PANDUAN-ONLINE.md</code>.</li>' +
-        '<li>Buka <strong>Project Settings → API</strong>. Salin <strong>Project URL</strong> dan <strong>anon/public key</strong>.</li>' +
+        '<li>Buka <strong>SQL Editor</strong> -> <strong>New query</strong> -> jalankan <code>supabase/schema.sql</code> untuk project baru, atau untuk project lama jalankan berurutan: <code>fix-auth.sql</code>, <code>fix-permission.sql</code>, <code>add-wages.sql</code>, <code>add-borong.sql</code>, <code>add-online-updates.sql</code>, <code>update-passwords.sql</code>. Detail ada di <code>PANDUAN-ONLINE.md</code>.</li>' +
+        '<li>Buka <strong>Project Settings -> API</strong>. Salin <strong>Project URL</strong> dan <strong>anon/public key</strong>.</li>' +
         '<li>Tempel keduanya di atas, lalu klik <strong>Aktifkan Supabase</strong>. Data contoh akan otomatis terunggah.</li>' +
         '<li>Deploy ulang folder aplikasi ke hosting gratis. Semua perangkat yang membuka link akan memakai database yang sama.</li>' +
         '</ol></div></div><br>' +
-        '<div class="card"><div class="card-head"><h3>☁️ Backup ke Google Sheet + Gmail</h3>' +
+        '<div class="card"><div class="card-head"><h3>Backup ke Google Sheet + Gmail</h3>' +
         (bk.lastBackup ? '<span class="badge badge-green">Terakhir: ' + U.dateTime(bk.lastBackup) + '</span>' : '<span class="badge badge-yellow">Belum pernah backup</span>') +
         '</div><div class="card-body">' +
         '<div class="notice">Supabase sudah menyimpan data bersama secara otomatis. Tambahan ini mengirim salinan seluruh tabel ke <strong>Google Sheet</strong>, menyimpan file JSON di <strong>Google Drive</strong>, dan mengirim email ke <strong>Gmail</strong>. Siapkan sekali lewat file <code>google-apps-script/Code.gs</code> (panduan ada di README).</div><br>' +
         '<div class="form-grid">' +
-        '<div class="field full"><label>Web App URL (dari Deploy → Web app)</label><input id="bkUrl" placeholder="https://script.google.com/macros/s/.../exec" value="' + U.esc(bk.url || '') + '"></div>' +
+        '<div class="field full"><label>Web App URL (dari Deploy -> Web app)</label><input id="bkUrl" placeholder="https://script.google.com/macros/s/.../exec" value="' + U.esc(bk.url || '') + '"></div>' +
         '<div class="field"><label>Email Gmail penerima</label><input id="bkEmail" type="email" placeholder="nama@gmail.com" value="' + U.esc(bk.email || '') + '"></div>' +
         '<div class="field"><label>Token rahasia (sama dengan Script Properties)</label><input id="bkToken" type="password" value="' + U.esc(bk.token || '') + '"></div>' +
         '</div>' +
         '<div style="margin-top:12px"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="bkAuto"' + (bk.auto ? ' checked' : '') + ' style="width:auto"> Backup otomatis 20 detik setelah ada perubahan data</label></div>' +
         '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn" id="bkSave">💾 Simpan Pengaturan</button>' +
-        '<button class="btn btn-primary" id="bkNow">☁️ Backup Sekarang</button>' +
-        '<button class="btn" id="bkJson">⬇ Unduh Cadangan JSON</button>' +
-        (bk.sheetUrl ? '<a class="btn" href="' + U.esc(bk.sheetUrl) + '" target="_blank" rel="noopener">📊 Buka Google Sheet</a>' : '') +
+        '<button class="btn" id="bkSave">Simpan Pengaturan</button>' +
+        '<button class="btn btn-primary" id="bkNow">Backup Sekarang</button>' +
+        '<button class="btn" id="bkJson"> Unduh Cadangan JSON</button>' +
+        (bk.sheetUrl ? '<a class="btn" href="' + U.esc(bk.sheetUrl) + '" target="_blank" rel="noopener">Buka Google Sheet</a>' : '') +
         '</div><div id="bkStatus" class="hint" style="margin-top:10px">' +
         (bk.sheetUrl ? 'Sheet: ' + U.esc(bk.sheetUrl) : 'Belum ada Google Sheet tertaut.') + '</div>' +
         '</div></div><br>' +
@@ -913,7 +913,7 @@ Object.assign(window.Views, (function () {
         } catch (err) {
           UI.toast(err.message, 'error');
           if (status) status.textContent = 'Gagal: ' + err.message;
-          bkNow.disabled = false; bkNow.textContent = '☁️ Backup Sekarang';
+          bkNow.disabled = false; bkNow.textContent = 'Backup Sekarang';
         }
       });
       const bkJson = U.$('#bkJson', root);
@@ -943,7 +943,7 @@ Object.assign(window.Views, (function () {
       },
       notice: 'Isi Nama Karyawan dan Jabatan sesuai peran di perusahaan: Manager, Mandor, Angkat Junjung, ' +
         'Pemborong Amplas, atau Pemborong Packing. Nama baru bisa langsung diketik. ' +
-        'Total harian = (Jumlah masuk × Gaji harian) + (Jam lembur × Upah lembur per jam).',
+        'Total harian = (Jumlah masuk x Gaji harian) + (Jam lembur x Upah lembur per jam).',
       fields: [
         { key: 'date', label: 'Tanggal', type: 'date', required: true },
         { key: 'employee', label: 'Nama Karyawan', type: 'datalist', options: names, required: true, placeholder: 'mis. Rizky Prasetyo' },
@@ -1029,7 +1029,7 @@ Object.assign(window.Views, (function () {
       '.summary{width:340px;margin-left:auto}.sign{display:flex;justify-content:space-between;margin-top:48px;font-size:12px}' +
       '@media print{body{padding:12px}.no-print{display:none}}' +
       '</style></head><body>' +
-      '<div class="head"><div><h1>SLIP GAJI MINGGUAN</h1><div class="muted">CV Furniture Jati — Sistem Stok & Produksi</div></div>' +
+      '<div class="head"><div><h1>SLIP GAJI MINGGUAN</h1><div class="muted">CV Furniture Jati - Sistem Stok & Produksi</div></div>' +
       '<div style="text-align:right"><strong>' + U.esc(week.employee) + '</strong>' +
       (week.position ? '<br><span class="muted">Jabatan: ' + U.esc(week.position) + '</span>' : '') +
       '<br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span></div></div>' +
@@ -1081,22 +1081,22 @@ Object.assign(window.Views, (function () {
 
       return UI.pageHead('Gaji Karyawan Harian', 'Nama karyawan & jabatan (Manager, Mandor, Angkat Junjung, Pemborong Amplas, Pemborong Packing), upah harian, lembur, dan slip mingguan',
           (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
-          '<button class="btn" data-act="printSlip">🖨️ Cetak Slip Mingguan</button>') +
+          '<button class="btn" data-act="printSlip">Cetak Slip Mingguan</button>') +
         '<div class="grid grid-stats">' +
-        UI.statCard({ label: 'Gaji Hari Ini', value: U.rp(today.total), sub: U.dateID(U.today()), icon: '💰' }) +
-        UI.statCard({ label: 'Karyawan Masuk Hari Ini', value: U.fmt(today.employees), sub: 'orang', icon: '👷' }) +
-        UI.statCard({ label: 'Gaji Pokok Hari Ini', value: U.rp(today.basic), sub: 'jumlah masuk × harian', icon: '📅' }) +
-        UI.statCard({ label: 'Upah Lembur Hari Ini', value: U.rp(today.overtime), sub: 'jam × tarif lembur', icon: '⏱️' }) +
+        UI.statCard({ label: 'Gaji Hari Ini', value: U.rp(today.total), sub: U.dateID(U.today()), icon: 'Gaji' }) +
+        UI.statCard({ label: 'Karyawan Masuk Hari Ini', value: U.fmt(today.employees), sub: 'orang', icon: 'Pengrajin' }) +
+        UI.statCard({ label: 'Gaji Pokok Hari Ini', value: U.rp(today.basic), sub: 'jumlah masuk x harian', icon: 'Tanggal' }) +
+        UI.statCard({ label: 'Upah Lembur Hari Ini', value: U.rp(today.overtime), sub: 'jam x tarif lembur', icon: 'Lembur' }) +
         '</div><br>' +
-        '<div class="card"><div class="card-head"><h3>👷 Daftar Nama Karyawan</h3><span class="badge badge-blue">' + U.fmt(names.length) + ' orang</span></div><div class="card-body">' +
+        '<div class="card"><div class="card-head"><h3>Daftar Nama Karyawan</h3><span class="badge badge-blue">' + U.fmt(names.length) + ' orang</span></div><div class="card-body">' +
         (employeeCards.length ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + employeeCards.map(e =>
           '<button type="button" class="btn btn-sm ' + (state.payrollEmployee === e.name ? 'btn-primary' : '') + '" data-act="filterEmployee" data-name="' + U.esc(e.name) + '">' +
-          U.esc(e.name) + ' <small style="opacity:.75">· ' + U.esc(e.position) + ' · ' + U.fmt(e.count) + ' catatan</small></button>').join('') + '</div>' :
+          U.esc(e.name) + ' <small style="opacity:.75"> |  ' + U.esc(e.position) + '  |  ' + U.fmt(e.count) + ' catatan</small></button>').join('') + '</div>' :
           '<div class="empty">Belum ada nama karyawan. Klik "+ Catat Gaji Harian" untuk menambah.</div>') +
         '</div></div><br>' +
         '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
-        '<button class="btn btn-sm" data-act="wageExcel">⬇ Excel</button>' +
-        '<button class="btn btn-sm" data-act="wagePdf">⬇ PDF</button></span></div><div class="card-body">' +
+        '<button class="btn btn-sm" data-act="wageExcel"> Excel</button>' +
+        '<button class="btn btn-sm" data-act="wagePdf"> PDF</button></span></div><div class="card-body">' +
         '<div class="toolbar"><input id="wageQ" placeholder="Cari nama / jabatan / catatan..." value="' + U.esc(state.payrollQ) + '">' +
         '<input type="date" id="wageFrom" value="' + U.esc(state.payrollFrom) + '">' +
         '<input type="date" id="wageTo" value="' + U.esc(state.payrollTo) + '">' +
@@ -1121,7 +1121,7 @@ Object.assign(window.Views, (function () {
             ...(can('payroll.edit') ? [{ label: 'Edit', act: 'editWage' }, { label: 'Hapus', act: 'delWage', cls: 'danger' }] : [])],
           empty: 'Belum ada catatan gaji harian.'
         }) + '</div></div><br>' +
-        '<div class="card"><div class="card-head"><h3>🧾 Slip Gaji Mingguan</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' — ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
+        '<div class="card"><div class="card-head"><h3>Slip Gaji Mingguan</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' - ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
         '<div class="form-grid">' +
         '<div class="field"><label>Karyawan</label><select id="slipEmployee">' + weekOpts + '</select></div>' +
         '<div class="field"><label>Mulai Pekan (Senin)</label><input type="date" id="slipWeek" value="' + U.esc(state.slipWeek) + '"></div>' +
@@ -1223,7 +1223,7 @@ Object.assign(window.Views, (function () {
         '<input class="bi-rate" data-i="' + i + '" type="number" min="0" step="1000" placeholder="Rp/pcs" value="' + U.esc(it.rate) + '">' +
         '<input class="bi-ot" data-i="' + i + '" type="number" min="0" step="1000" placeholder="Lembur Rp" value="' + U.esc(it.overtime || 0) + '">' +
         '<strong class="bi-amount" data-i="' + i + '">' + U.rp(DB.borongItemTotal(it)) + '</strong>' +
-        '<button type="button" class="btn btn-sm btn-danger bi-del" data-i="' + i + '">✕</button></div>';
+        '<button type="button" class="btn btn-sm btn-danger bi-del" data-i="' + i + '">X</button></div>';
 
     const sync = () => {
       U.$$('.borong-item', U.$('#modalRoot')).forEach(row => {
@@ -1251,7 +1251,7 @@ Object.assign(window.Views, (function () {
       if (el) el.innerHTML =
         '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Target barang</span><span>' + U.fmt(target) + ' pcs</span></div>' +
         '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Selesai dikerjakan</span><span>' + U.fmt(done) + ' pcs</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Upah (selesai × tarif)</span><span>' + U.rp(subtotal) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Upah (selesai x tarif)</span><span>' + U.rp(subtotal) + '</span></div>' +
         '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tambahan lembur</span><span>' + U.rp(extra) + '</span></div>' +
         '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:16px;border-top:1px solid var(--border)"><span>TOTAL</span><span>' + U.rp(subtotal + extra) + '</span></div>';
     };
@@ -1356,9 +1356,9 @@ Object.assign(window.Views, (function () {
       '.summary{width:340px;margin-left:auto}.sign{display:flex;justify-content:space-between;margin-top:44px;font-size:12px}' +
       '@media print{body{padding:10px}}' +
       '</style></head><body>' +
-      '<div class="head"><div><h1>SLIP GAJI BORONG</h1><div class="muted">Amplas & Packing — CV Furniture Jati</div></div>' +
+      '<div class="head"><div><h1>SLIP GAJI BORONG</h1><div class="muted">Amplas & Packing - CV Furniture Jati</div></div>' +
       '<div style="text-align:right"><strong>' + U.esc(week.employee || 'Semua Orang') + '</strong><br><span class="muted">Periode ' + U.dateID(week.start) + ' s/d ' + U.dateID(week.end) + '</span>' +
-      (week.rows[0] ? '<br><span class="muted">Admin: ' + U.esc(week.rows[0].handledByName || '-') + (week.rows[0].workerName ? ' · Karyawan: ' + U.esc(week.rows[0].workerName) : '') + '</span>' : '') + '</div></div>' +
+      (week.rows[0] ? '<br><span class="muted">Admin: ' + U.esc(week.rows[0].handledByName || '-') + (week.rows[0].workerName ? '  |  Karyawan: ' + U.esc(week.rows[0].workerName) : '') + '</span>' : '') + '</div></div>' +
       '<h2>Rincian Barang per Orang</h2>' +
       '<table><thead><tr><th>Tanggal</th><th>Admin</th><th>Jenis</th><th>SKU</th><th>Produk</th><th>Target</th><th>Selesai</th><th>Tarif</th><th>Upah</th><th>Lembur</th><th>Jumlah</th></tr></thead>' +
       '<tbody>' + (itemRows || '<tr><td colspan="11" style="text-align:center">Tidak ada data pada periode ini</td></tr>') + '</tbody></table>' +
@@ -1398,7 +1398,7 @@ Object.assign(window.Views, (function () {
       '<td style="text-align:right"><strong>' + U.fmt(r.done) + '</strong></td>' +
       '<td style="min-width:110px">' + bar(r.done, r.target) + '</td>' +
       '<td style="text-align:right">' + U.rp(r.wage) + '</td></tr>').join('') : empty('Belum ada tugas borong tanggal ini.', 8);
-    return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>📊 Pengawasan Harian Produksi & Pemborong</h3>' +
+    return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>Laporan Pengawasan Harian Produksi & Pemborong</h3>' +
       '<input type="date" id="monitorDate" value="' + U.esc(d) + '" title="Tanggal pengawasan"></div><div class="card-body">' +
       '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">' +
       '<div><div style="color:var(--muted);font-size:11px">Diberikan ke pengrajin</div><strong style="font-size:17px">' + U.fmt(w.given) + ' pcs</strong></div>' +
@@ -1407,8 +1407,8 @@ Object.assign(window.Views, (function () {
       '<div><div style="color:var(--muted);font-size:11px">Selesai borong</div><strong style="font-size:17px">' + U.fmt(w.done) + ' pcs</strong></div>' +
       '<div><div style="color:var(--muted);font-size:11px">Upah borong</div><strong style="font-size:17px">' + U.rp(w.wage) + '</strong></div>' +
       '</div><div class="grid grid-2">' +
-      '<div><div class="section-title">Produksi — Pengrajin</div><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Diberikan</th><th>Selesai</th><th>Sisa</th><th>Progres</th></tr></thead><tbody>' + prodRows + '</tbody></table></div></div>' +
-      '<div><div class="section-title">Borong — Amplas / Packing</div><div style="overflow:auto"><table><thead><tr><th>Admin</th><th>Karyawan</th><th>Pemborong</th><th>Jenis</th><th>Target</th><th>Selesai</th><th>Progres</th><th>Upah</th></tr></thead><tbody>' + borongRows + '</tbody></table></div></div>' +
+      '<div><div class="section-title">Produksi - Pengrajin</div><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Diberikan</th><th>Selesai</th><th>Sisa</th><th>Progres</th></tr></thead><tbody>' + prodRows + '</tbody></table></div></div>' +
+      '<div><div class="section-title">Borong - Amplas / Packing</div><div style="overflow:auto"><table><thead><tr><th>Admin</th><th>Karyawan</th><th>Pemborong</th><th>Jenis</th><th>Target</th><th>Selesai</th><th>Progres</th><th>Upah</th></tr></thead><tbody>' + borongRows + '</tbody></table></div></div>' +
       '</div></div></div>';
   }
 
@@ -1438,15 +1438,15 @@ Object.assign(window.Views, (function () {
       return UI.pageHead('Tugas & Gaji Borong Amplas / Packing', 'Admin produksi menugaskan harian; owner memantau target, realisasi, dan upah',
         (canAssign ? '<button class="btn btn-primary" data-act="assignBorong">+ Tugaskan Borong Harian</button>' : '') +
         (canCreate ? '<button class="btn" data-act="addBorong">+ Catat Gaji</button>' : '') +
-        '<button class="btn" data-act="printBorong">🖨️ Cetak Slip Borong</button>') +
+        '<button class="btn" data-act="printBorong">Cetak Slip Borong</button>') +
         '<div class="grid grid-stats">' +
-        UI.statCard({ label: 'Selesai / Target', value: U.fmt(today.done) + ' / ' + U.fmt(today.target), sub: 'pcs hari ini', icon: '✅' }) +
-        UI.statCard({ label: 'Total Upah Borong', value: U.rp(today.total), sub: U.dateID(U.today()), icon: '💰' }) +
-        UI.statCard({ label: 'Amplas', value: U.rp(today.amplas), sub: 'hari ini', icon: '🪵' }) +
-        UI.statCard({ label: 'Packing', value: U.rp(today.packing), sub: 'hari ini', icon: '📦' }) +
+        UI.statCard({ label: 'Selesai / Target', value: U.fmt(today.done) + ' / ' + U.fmt(today.target), sub: 'pcs hari ini', icon: 'Selesai' }) +
+        UI.statCard({ label: 'Total Upah Borong', value: U.rp(today.total), sub: U.dateID(U.today()), icon: 'Gaji' }) +
+        UI.statCard({ label: 'Amplas', value: U.rp(today.amplas), sub: 'hari ini', icon: 'Kayu' }) +
+        UI.statCard({ label: 'Packing', value: U.rp(today.packing), sub: 'hari ini', icon: 'Produk' }) +
         '</div><br>' + workMonitorHtml() + '<br>' +
         '<div class="card"><div class="card-head"><h3>Tugas & Catatan Borong</h3><span style="display:flex;gap:8px">' +
-        '<button class="btn btn-sm" data-act="borongExcel">⬇ Excel</button><button class="btn btn-sm" data-act="borongPdf">⬇ PDF</button></span></div><div class="card-body">' +
+        '<button class="btn btn-sm" data-act="borongExcel"> Excel</button><button class="btn btn-sm" data-act="borongPdf"> PDF</button></span></div><div class="card-body">' +
         '<div class="toolbar"><input id="borongQ" placeholder="Cari admin / karyawan / pemborong..." value="' + U.esc(state.borongQ) + '">' +
         '<input type="date" id="borongFrom" value="' + U.esc(state.borongFrom) + '">' +
         '<input type="date" id="borongTo" value="' + U.esc(state.borongTo) + '">' +
@@ -1461,7 +1461,7 @@ Object.assign(window.Views, (function () {
             { label: 'Karyawan yang Dipegang', render: r => U.esc(r.workerName || '-') },
             { label: 'Nama Pemborong', key: 'employee' },
             { label: 'Jenis', render: r => U.badge(r.type) },
-            { label: 'Barang (selesai / target)', render: r => (r.items || []).map(it => U.esc(it.name) + ' × ' + U.fmt(it.qty) + ' / ' + U.fmt(DB.borongItemTarget(it))).join('<br>') || '-' },
+            { label: 'Barang (selesai / target)', render: r => (r.items || []).map(it => U.esc(it.name) + ' x ' + U.fmt(it.qty) + ' / ' + U.fmt(DB.borongItemTarget(it))).join('<br>') || '-' },
             { label: 'Upah Borong', align: 'right', render: r => U.rp(U.sum(r.items || [], it => U.num(it.qty) * U.num(it.rate))) },
             { label: 'Lembur', align: 'right', render: r => U.rp(U.sum(r.items || [], it => U.num(it.overtime)) + U.num(r.overtimeExtra)) },
             { label: 'Total', align: 'right', render: r => '<strong>' + U.rp(DB.borongTotal(r)) + '</strong>' },
@@ -1470,7 +1470,7 @@ Object.assign(window.Views, (function () {
           actions: canEdit ? [{ label: 'Edit', act: 'editBorong' }, { label: 'Hapus', act: 'delBorong', cls: 'danger' }] : [],
           empty: 'Belum ada tugas borong. Klik "+ Tugaskan Borong Harian".'
         }) + '</div></div><br>' +
-        '<div class="card"><div class="card-head"><h3>🧾 Slip Gaji Borong per Orang</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' — ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
+        '<div class="card"><div class="card-head"><h3>Slip Gaji Borong per Orang</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' - ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
         '<div class="form-grid">' +
         '<div class="field"><label>Orang</label><select id="slipBorongEmployee">' + nameOpts + '</select></div>' +
         '<div class="field"><label>Mulai Pekan (Senin)</label><input type="date" id="slipBorongWeek" value="' + U.esc(state.slipBorongWeek) + '"></div>' +
@@ -1692,7 +1692,7 @@ Object.assign(window.Views, (function () {
       if (!p) {
         p = DB.insert('products', {
           sku: sku, name: name || sku, category: 'Lainnya', size: '', status: 'Gudang', minStock: 0,
-          photo: DB.svgPhoto('📦', '#f1f5f9'), notes: note || 'Diimpor dari Excel', createdAt: now
+          photo: DB.svgPhoto('Produk', '#f1f5f9'), notes: note || 'Diimpor dari Excel', createdAt: now
         });
         byKey[key] = p; res.products++;
       }
@@ -1803,7 +1803,7 @@ Object.assign(window.Views, (function () {
   const importView = {
     render() {
       return UI.pageHead('Import Excel / CSV', 'Impor dataproduk, barang masuk, dan barang keluar dari file Excel Anda',
-        '<button class="btn" id="impTemplate">⬇ Unduh Template</button>') +
+        '<button class="btn" id="impTemplate"> Unduh Template</button>') +
         '<div id="importArea">' + this.area() + '</div>';
     },
     area() {
@@ -1815,17 +1815,17 @@ Object.assign(window.Views, (function () {
           '<p class="hint" style="margin-top:10px">Belum ada file dipilih. ' + (s.fileName ? 'Terakhir: ' + U.esc(s.fileName) : '') + '</p>' +
           '</div></div>';
       }
-      const sel = (field) => '<select data-imp-map="' + field + '"><option value="">— tidak ada —</option>' +
+      const sel = (field) => '<select data-imp-map="' + field + '"><option value="">- tidak ada -</option>' +
         s.headers.map(h => '<option value="' + U.esc(h) + '"' + (s.mapping[field] === h ? ' selected' : '') + '>' + U.esc(h) + '</option>').join('') + '</select>';
       const mapping = impModeFields[s.mode].map(f =>
         '<div class="field"><label>' + impFieldLabel[f] + '</label>' + sel(f) + '</div>').join('');
       const preview = s.rows.slice(0, 8).map(r => '<tr>' + s.headers.map(h =>
         '<td>' + U.esc(typeof r[h] === 'string' ? r[h].slice(0, 40) : (r[h] instanceof Date ? U.dateID(impDate(r[h])) : r[h])) + '</td>').join('') + '</tr>').join('');
       const result = s.result ? '<div class="notice ' + (s.result.errors.length ? 'error' : '') + '"><strong>Hasil import:</strong> ' +
-        'Produk baru: ' + s.result.products + ' · Saldo awal: ' + (s.result.saldoAwal || 0) +
-        ' · Barang masuk: ' + s.result.inbound + ' · Barang keluar: ' + s.result.outbound +
-        ' · Perlu dicek: ' + (s.result.flagged || 0) +
-        ' · Dilewati: ' + s.result.skipped + ' · Error: ' + s.result.errors.length +
+        'Produk baru: ' + s.result.products + '  |  Saldo awal: ' + (s.result.saldoAwal || 0) +
+        '  |  Barang masuk: ' + s.result.inbound + '  |  Barang keluar: ' + s.result.outbound +
+        '  |  Perlu dicek: ' + (s.result.flagged || 0) +
+        '  |  Dilewati: ' + s.result.skipped + '  |  Error: ' + s.result.errors.length +
         (s.result.errors.length ? '<br>' + s.result.errors.slice(0, 5).map(U.esc).join('<br>') : '') + '</div><br>' : '';
       const isStok = s.mode === 'stok';
       const step3 = isStok
@@ -1857,7 +1857,7 @@ Object.assign(window.Views, (function () {
         '<div class="table-wrap"><table class="data-table"><thead><tr>' + s.headers.map(h => '<th>' + U.esc(h) + '</th>').join('') +
         '</tr></thead><tbody>' + preview + '</tbody></table></div>' +
         '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn btn-primary" id="impRun"' + (s.busy || !can('import.create') ? ' disabled' : '') + '>' + (s.busy ? 'Mengimpor...' : '⬆️ Import ' + (isStok ? 'Workbook Stok' : s.rows.length + ' Baris')) + '</button>' +
+        '<button class="btn btn-primary" id="impRun"' + (s.busy || !can('import.create') ? ' disabled' : '') + '>' + (s.busy ? 'Mengimpor...' : ' Import ' + (isStok ? 'Workbook Stok' : s.rows.length + ' Baris')) + '</button>' +
         '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="impSkipDuplicate"' + (s.skipDuplicate !== false ? ' checked' : '') + ' style="width:auto"> Lewati duplikat</label>' +
         '</div></div></div>';
     },
@@ -1944,7 +1944,7 @@ Object.assign(window.Views, (function () {
                 DB.insert('products', {
                   sku: sku || ('IMP' + Date.now() + idx), name: nama || sku, category: String(impVal(row, 'kategori') || 'Lainnya'),
                   size: String(impVal(row, 'ukuran') || ''), status: String(impVal(row, 'status') || 'Gudang'),
-                  minStock: U.num(impVal(row, 'minStock')), photo: DB.svgPhoto('📦', '#f1f5f9'),
+                  minStock: U.num(impVal(row, 'minStock')), photo: DB.svgPhoto('Produk', '#f1f5f9'),
                   notes: String(impVal(row, 'keterangan') || '')
                 });
                 res.products++;
@@ -1967,7 +1967,7 @@ Object.assign(window.Views, (function () {
               product = DB.insert('products', {
                 sku: sku || ('IMP' + Date.now() + idx), name: nama || sku || 'Produk Import',
                 category: String(impVal(row, 'kategori') || 'Lainnya'), size: String(impVal(row, 'ukuran') || ''),
-                status: 'Gudang', minStock: 0, photo: DB.svgPhoto('📦', '#f1f5f9'), notes: 'Dibuat saat import'
+                status: 'Gudang', minStock: 0, photo: DB.svgPhoto('Produk', '#f1f5f9'), notes: 'Dibuat saat import'
               });
               res.products++;
             }
