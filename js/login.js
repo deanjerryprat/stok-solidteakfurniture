@@ -1,4 +1,4 @@
-/* login.js — halaman masuk. Setelah berhasil, pindah ke app.html */
+/* login.js - halaman masuk. Setelah berhasil, pindah ke app.html */
 window.Login = (function () {
   async function init() {
     DB.load();
