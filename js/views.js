@@ -1,6 +1,6 @@
-/* views.js — Dashboard, Produk, Barang Masuk, Barang Keluar, Pengrajin */
+/* views.js â€” Dashboard, Produk, Barang Masuk, Barang Keluar, Pengrajin */
 window.Views = (function () {
-  const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' — ' + p.name }));
+  const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' â€” ' + p.name }));
   const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pName = id => (DB.get('products', id) || {}).name || '-';
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
@@ -81,16 +81,16 @@ window.Views = (function () {
         '<span>' + U.esc(it.label) + '</span><strong style="white-space:nowrap">' + U.fmt(it.qty) + '</strong></div>').join('') :
         '<div style="color:var(--muted);font-size:12px">' + empty + '</div>') +
       (bucket.items.length > 5 ? '<small style="color:var(--muted)">+' + (bucket.items.length - 5) + ' produk lainnya</small>' : '') + '</div>';
-    return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>📋 Informasi Produksi & Gudang</h3>' +
+    return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>ðŸ“‹ Informasi Produksi & Gudang</h3>' +
       '<span class="badge badge-blue">' + U.dateID(o.date) + '</span></div><div class="card-body">' +
       '<div style="display:flex;gap:20px;flex-wrap:wrap">' +
-      chip('Total di luar gudang*', o.outside, '🚚') +
-      chip('Di gudang', o.warehouse.qty, '🏭') +
-      chip('Dikerjakan produksi', o.production.qty, '🔨') +
-      chip('Dikontrol gudang (QC)', o.qcPending.qty, '🔍') +
-      chip('Dipinjam sampel', o.sample.qty, '🧪') +
-      chip('Pemborong obat', o.borongObat.qty, '💊') +
-      chip('Servis / pengrajin', o.servis.qty, '🔧') +
+      chip('Total di luar gudang*', o.outside, 'ðŸšš') +
+      chip('Di gudang', o.warehouse.qty, 'ðŸ­') +
+      chip('Dikerjakan produksi', o.production.qty, 'ðŸ”¨') +
+      chip('Dikontrol gudang (QC)', o.qcPending.qty, 'ðŸ”') +
+      chip('Dipinjam sampel', o.sample.qty, 'ðŸ§ª') +
+      chip('Pemborong obat', o.borongObat.qty, 'ðŸ’Š') +
+      chip('Servis / pengrajin', o.servis.qty, 'ðŸ”§') +
       '</div><div style="margin-top:6px;color:var(--muted);font-size:11px">* Di luar gudang = proses produksi + QC + pinjaman sampel + borong obat + servis (tidak termasuk afkir/rusak).</div>' +
       '<div class="grid grid-2" style="margin-top:14px">' +
       panel('Barang sedang dikerjakan tim produksi', o.production, 'Tidak ada barang dalam proses.') +
@@ -110,10 +110,10 @@ window.Views = (function () {
       const maxStock = Math.max(1, ...prods.map(p => DB.stock(p.id).warehouse));
       const top = prods.map(p => ({ p, s: DB.stock(p.id) })).sort((a, b) => b.s.warehouse - a.s.warehouse).slice(0, 6);
       const activities = []
-        .concat(DB.all('inbound').map(x => ({ date: x.date, text: 'Barang masuk ' + x.productName + ' (' + x.qty + ')', icon: '📥', href: '#/inbound' })))
-        .concat(DB.all('outbound').map(x => ({ date: x.date, text: x.type + ' ' + x.productName + ' (' + x.qty + ')', icon: '📤', href: '#/outbound' })))
-        .concat(DB.all('distributions').map(x => ({ date: x.date, text: 'Distribusi ke ' + x.artisanName + ' — ' + x.productName + ' (' + x.qty + ')', icon: '🔨', href: '#/distributions' })))
-        .concat(DB.all('returns').map(x => ({ date: x.date, text: 'Barang kembali dari ' + x.artisanName + ' (' + x.qty + ')', icon: '↩️', href: '#/returns' })))
+        .concat(DB.all('inbound').map(x => ({ date: x.date, text: 'Barang masuk ' + x.productName + ' (' + x.qty + ')', icon: 'ðŸ“¥', href: '#/inbound' })))
+        .concat(DB.all('outbound').map(x => ({ date: x.date, text: x.type + ' ' + x.productName + ' (' + x.qty + ')', icon: 'ðŸ“¤', href: '#/outbound' })))
+        .concat(DB.all('distributions').map(x => ({ date: x.date, text: 'Distribusi ke ' + x.artisanName + ' â€” ' + x.productName + ' (' + x.qty + ')', icon: 'ðŸ”¨', href: '#/distributions' })))
+        .concat(DB.all('returns').map(x => ({ date: x.date, text: 'Barang kembali dari ' + x.artisanName + ' (' + x.qty + ')', icon: 'â†©ï¸', href: '#/returns' })))
         .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
       const late = DB.all('distributions').filter(d => {
         const rem = d.qty - U.sum(DB.all('returns').filter(r => r.distributionId === d.id), r => r.qty);
@@ -122,16 +122,16 @@ window.Views = (function () {
       const low = prods.filter(p => DB.stock(p.id).warehouse <= p.minStock).slice(0, 5);
 
       return UI.pageHead('Dashboard', 'Ringkasan seluruh stok & aktivitas perusahaan',
-          [can('reports.view') ? '<a class="btn btn-primary" href="#/reports">📊 Lihat Laporan</a>' : '']) +
+          [can('reports.view') ? '<a class="btn btn-primary" href="#/reports">ðŸ“Š Lihat Laporan</a>' : '']) +
         '<div class="grid grid-stats">' +
-        UI.statCard({ label: 'Total Seluruh Stok', value: U.fmt(t.total), sub: 'gudang + proses + QC', icon: '📦' }) +
-        UI.statCard({ label: 'Total Barang Masuk', value: U.fmt(t.inbound), sub: 'akumulasi penerimaan', icon: '📥', accent: 'in' }) +
-        UI.statCard({ label: 'Total Barang Keluar', value: U.fmt(t.outbound), sub: 'semua jenis keluar', icon: '📤', accent: 'out' }) +
-        UI.statCard({ label: 'Total Barang di Gudang', value: U.fmt(t.warehouse), sub: 'siap dipakai/produksi', icon: '🏭' }) +
-        UI.statCard({ label: 'Total di Pengrajin', value: U.fmt(t.process), sub: 'sedang dikerjakan', icon: '🔨', accent: 'process' }) +
-        UI.statCard({ label: 'Menunggu QC', value: U.fmt(t.qc), sub: 'kontrol tim gudang', icon: '🔍', accent: 'qc' }) +
-        UI.statCard({ label: 'Barang Rusak / Afkir', value: U.fmt(t.damaged), sub: 'tidak layak jual', icon: '⚠️', accent: 'bad' }) +
-        UI.statCard({ label: 'Di Borong Obat', value: U.fmt(t.borong), sub: 'barang keluar borongan', icon: '🚚' }) +
+        UI.statCard({ label: 'Total Seluruh Stok', value: U.fmt(t.total), sub: 'gudang + proses + QC', icon: 'ðŸ“¦' }) +
+        UI.statCard({ label: 'Total Barang Masuk', value: U.fmt(t.inbound), sub: 'akumulasi penerimaan', icon: 'ðŸ“¥', accent: 'in' }) +
+        UI.statCard({ label: 'Total Barang Keluar', value: U.fmt(t.outbound), sub: 'semua jenis keluar', icon: 'ðŸ“¤', accent: 'out' }) +
+        UI.statCard({ label: 'Total Barang di Gudang', value: U.fmt(t.warehouse), sub: 'siap dipakai/produksi', icon: 'ðŸ­' }) +
+        UI.statCard({ label: 'Total di Pengrajin', value: U.fmt(t.process), sub: 'sedang dikerjakan', icon: 'ðŸ”¨', accent: 'process' }) +
+        UI.statCard({ label: 'Menunggu QC', value: U.fmt(t.qc), sub: 'kontrol tim gudang', icon: 'ðŸ”', accent: 'qc' }) +
+        UI.statCard({ label: 'Barang Rusak / Afkir', value: U.fmt(t.damaged), sub: 'tidak layak jual', icon: 'âš ï¸', accent: 'bad' }) +
+        UI.statCard({ label: 'Di Borong Obat', value: U.fmt(t.borong), sub: 'barang keluar borongan', icon: 'ðŸšš' }) +
         '</div><br>' +
         '<div class="grid grid-2">' +
         '<div class="card"><div class="card-head"><h3>Stok Gudang per Produk</h3><a href="#/products" class="link-btn">Detail</a></div>' +
@@ -144,15 +144,15 @@ window.Views = (function () {
         activities.map(a => '<div class="timeline-item"><span>' + a.icon + '</span><div><div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + '</small></div></div>').join('') +
         '</div></div></div><br>' +
         '<div class="grid grid-2">' +
-        '<div class="card"><div class="card-head"><h3>⚠️ Pekerjaan Terlambat</h3><a href="#/distributions" class="link-btn">Lihat semua</a></div><div class="card-body">' +
-        (late.length ? late.map(d => '<div class="timeline-item"><span>🕒</span><div><div><strong>' + U.esc(aName(d.artisanId)) + '</strong> — ' + U.esc(d.productName) + '</div>' +
-          '<small>Target ' + U.dateID(d.targetDate) + ' · sisa ' + U.fmt(d.qty - U.sum(DB.all('returns').filter(r => r.distributionId === d.id), r => r.qty)) + ' pcs</small></div></div>').join('') :
-          '<div class="empty">Tidak ada pekerjaan terlambat 🎉</div>') + '</div></div>' +
-        '<div class="card"><div class="card-head"><h3>📉 Stok Menipis</h3><a href="#/products" class="link-btn">Lihat produk</a></div><div class="card-body">' +
-        (low.length ? low.map(p => '<div class="timeline-item"><span>📦</span><div><div><strong>' + U.esc(p.name) + '</strong> — ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs</div>' +
+        '<div class="card"><div class="card-head"><h3>âš ï¸ Pekerjaan Terlambat</h3><a href="#/distributions" class="link-btn">Lihat semua</a></div><div class="card-body">' +
+        (late.length ? late.map(d => '<div class="timeline-item"><span>ðŸ•’</span><div><div><strong>' + U.esc(aName(d.artisanId)) + '</strong> â€” ' + U.esc(d.productName) + '</div>' +
+          '<small>Target ' + U.dateID(d.targetDate) + ' Â· sisa ' + U.fmt(d.qty - U.sum(DB.all('returns').filter(r => r.distributionId === d.id), r => r.qty)) + ' pcs</small></div></div>').join('') :
+          '<div class="empty">Tidak ada pekerjaan terlambat ðŸŽ‰</div>') + '</div></div>' +
+        '<div class="card"><div class="card-head"><h3>ðŸ“‰ Stok Menipis</h3><a href="#/products" class="link-btn">Lihat produk</a></div><div class="card-body">' +
+        (low.length ? low.map(p => '<div class="timeline-item"><span>ðŸ“¦</span><div><div><strong>' + U.esc(p.name) + '</strong> â€” ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs</div>' +
           '<small>Minimum ' + U.fmt(p.minStock) + ' pcs</small></div></div>').join('') :
           '<div class="empty">Semua stok aman</div>') + '</div></div></div>' +
-        (can('payroll.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>💰 Gaji Karyawan Harian</h3><a href="#/payroll" class="link-btn">Buka menu gaji</a></div><div class="card-body">' +
+        (can('payroll.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>ðŸ’° Gaji Karyawan Harian</h3><a href="#/payroll" class="link-btn">Buka menu gaji</a></div><div class="card-body">' +
           (function () {
             const p = DB.payrollSummary(U.today());
             return '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
@@ -162,7 +162,7 @@ window.Views = (function () {
               '</div><div style="margin-top:10px;color:var(--muted);font-size:12px">Catat gaji harian dan cetak slip gaji mingguan (bonus, bon/hutang, potongan telat) di menu Gaji Karyawan.</div>';
           })() +
           '</div></div>' : '') +
-        (can('borong.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>🧹 Tugas & Gaji Borong Amplas / Packing</h3><a href="#/borong" class="link-btn">Buka menu borong</a></div><div class="card-body">' +
+        (can('borong.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>ðŸ§¹ Tugas & Gaji Borong Amplas / Packing</h3><a href="#/borong" class="link-btn">Buka menu borong</a></div><div class="card-body">' +
           (function () {
             const b = DB.borongSummary(U.today());
             return '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
@@ -188,7 +188,7 @@ window.Views = (function () {
       fields: [
         { key: 'sku', label: 'Kode Produk / SKU', required: true, placeholder: 'ST005' },
         { key: 'name', label: 'Nama Produk', required: true, placeholder: 'Dining Chair' },
-        { key: 'category', label: 'Kategori', type: 'datalist', options: cats, required: true, placeholder: 'Pilih atau ketik kategori baru', hint: 'Pilih yang tersedia, atau ketik nama kategori baru.' },
+        { key: 'category', label: 'Kategori', type: 'select', options: cats, required: true, placeholder: 'Pilih kategori', hint: 'Kategori dibuat manual lewat tombol ðŸ·ï¸ Kelola Kategori.' },
         { key: 'size', label: 'Ukuran', placeholder: '48 x 52 x 85 cm' },
         { key: 'status', label: 'Status Produk', type: 'select', options: ['Gudang', 'Proses Obat', 'Barang Jadi'], required: true },
         { key: 'minStock', label: 'Stok Minimum', type: 'number', min: 0, value: 5 },
@@ -207,7 +207,6 @@ window.Views = (function () {
         data.rateAmplas = U.num(data.rateAmplas);
         data.ratePacking = U.num(data.ratePacking);
         data.category = String(data.category || '').trim();
-        if (data.category) DB.addCategory(data.category);
         // Foto yang tidak diubah tidak perlu dikirim ulang (bisa beberapa MB).
         if (existing && data.photo === existing.photo) delete data.photo;
         if (existing) { DB.update('products', existing.id, data); UI.toast('Produk diperbarui', 'success'); }
@@ -217,26 +216,29 @@ window.Views = (function () {
     });
   }
 
-  // Kelola daftar kategori: tambah baru, ubah nama (produk terkait ikut diubah), hapus yang kosong.
+  // Kelola kategori sepenuhnya manual: semua kategori bisa diubah/dihapus.
   function categoryManager() {
     const render = () => {
       const counts = {};
       DB.all('products').forEach(p => { const c = p.category || '-'; counts[c] = (counts[c] || 0) + 1; });
-      const list = DB.getCategories().map(c => {
-        const builtin = DB.DEFAULT_CATEGORIES.indexOf(c) >= 0;
+      const cats = DB.getCategories();
+      const list = cats.map(c => {
         const n = counts[c] || 0;
         return '<div style="display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)">' +
           '<strong style="flex:1">' + U.esc(c) + '</strong>' +
           '<span class="badge badge-gray">' + n + ' produk</span>' +
-          (builtin ? '<span class="badge">Bawaan</span>' : '<button class="btn btn-sm" data-rename="' + U.esc(c) + '">Ubah</button>') +
-          (!builtin && !n ? '<button class="btn btn-sm btn-danger" data-del="' + U.esc(c) + '">Hapus</button>' : '') +
+          '<button class="btn btn-sm" data-rename="' + U.esc(c) + '">Ubah</button>' +
+          '<button class="btn btn-sm btn-danger" data-del="' + U.esc(c) + '">Hapus</button>' +
           '</div>';
-      }).join('');
+      }).join('') || '<p style="color:var(--muted)">Belum ada kategori. Tambahkan kategori pertama di atas.</p>';
+      const emptyCount = cats.filter(c => !(counts[c] || 0)).length;
       UI.openModal(UI.modalHead('Kelola Kategori') +
         '<div class="modal-body">' +
-        '<p style="color:var(--muted);font-size:12px;margin:0">Kategori juga bisa dibuat langsung saat menambah produk. Kategori yang masih dipakai produk tidak bisa dihapus.</p>' +
+        '<p style="color:var(--muted);font-size:12px;margin:0">Semua kategori dibuat manual di sini (tidak ada kategori bawaan). Kategori yang masih dipakai produk dipindahkan ke kategori lain saat dihapus.</p>' +
         '<div style="display:flex;gap:8px;margin:14px 0"><input id="catNew" placeholder="Nama kategori baru" style="flex:1;padding:9px;border:1px solid var(--border);border-radius:8px">' +
-        '<button class="btn btn-primary" id="catAdd">+ Tambah</button></div>' +
+        '<button class="btn btn-primary" id="catAdd">+ Tambah</button>' +
+        (emptyCount ? '<button class="btn btn-sm" id="catClean">Hapus kosong (' + emptyCount + ')</button>' : '') +
+        '</div>' +
         '<div id="catList">' + list + '</div></div>' +
         '<div class="modal-foot"><button class="btn" data-close>Tutup</button></div>');
       const m = U.$('#modalRoot');
@@ -245,6 +247,14 @@ window.Views = (function () {
         if (!name) { UI.toast('Nama kategori wajib diisi', 'warning'); return; }
         if (!DB.addCategory(name)) { UI.toast('Kategori sudah ada', 'error'); return; }
         UI.toast('Kategori ditambahkan', 'success'); render(); App.refresh();
+      });
+      const cleanBtn = U.$('#catClean', m);
+      if (cleanBtn) cleanBtn.addEventListener('click', () => {
+        const empty = cats.filter(c => !(counts[c] || 0));
+        UI.confirm('Hapus ' + empty.length + ' kategori yang tidak dipakai?', () => {
+          empty.forEach(c => DB.deleteCategory(c));
+          UI.toast(empty.length + ' kategori kosong dihapus', 'success'); render(); App.refresh();
+        }, true);
       });
       U.$$('[data-rename]', m).forEach(b => b.addEventListener('click', () => {
         const old = b.dataset.rename;
@@ -261,10 +271,30 @@ window.Views = (function () {
       }));
       U.$$('[data-del]', m).forEach(b => b.addEventListener('click', () => {
         const name = b.dataset.del;
-        UI.confirm('Hapus kategori "' + name + '"?', () => {
-          if (!DB.deleteCategory(name)) { UI.toast('Kategori masih dipakai produk', 'error'); return; }
-          UI.toast('Kategori dihapus', 'success'); render(); App.refresh();
-        }, true);
+        const n = counts[name] || 0;
+        if (!n) {
+          UI.confirm('Hapus kategori "' + name + '"?', () => {
+            if (!DB.deleteCategory(name)) { UI.toast('Gagal menghapus kategori', 'error'); return; }
+            UI.toast('Kategori dihapus', 'success'); render(); App.refresh();
+          }, true);
+          return;
+        }
+        const others = cats.filter(c => c !== name);
+        if (!others.length) { UI.toast('Buat kategori lain dulu sebelum menghapus kategori yang dipakai.', 'warning'); return; }
+        UI.formModal({
+          title: 'Hapus Kategori',
+          values: {},
+          fields: [{
+            key: 'to', label: 'Pindahkan ' + n + ' produk ke', type: 'select', options: others,
+            required: true, full: true, placeholder: 'Pilih kategori tujuan',
+            hint: 'Kategori "' + name + '" akan dihapus setelah produk dipindahkan.'
+          }],
+          onSubmit(data, close) {
+            if (!DB.deleteCategory(name, data.to)) { UI.toast('Gagal menghapus kategori', 'error'); return; }
+            close(); UI.toast('Kategori dihapus. ' + n + ' produk dipindahkan ke ' + data.to + '.', 'success');
+            categoryManager(); App.refresh();
+          }
+        });
       }));
     };
     render();
@@ -281,9 +311,9 @@ window.Views = (function () {
       .sort((a, b) => b.date.localeCompare(a.date));
     UI.openModal(UI.modalHead('Detail Produk') +
       '<div class="modal-body"><div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">' +
-      '<img class="photo-preview" style="width:100px;height:100px" src="' + U.esc(p.photo || DB.svgPhoto('📦', '#f1f5f9')) + '">' +
+      '<img class="photo-preview" style="width:100px;height:100px" src="' + U.esc(p.photo || DB.svgPhoto('ðŸ“¦', '#f1f5f9')) + '">' +
       '<div><h3>' + U.esc(p.name) + '</h3><div class="badge badge-blue">' + U.esc(p.sku) + '</div> ' + U.badge(p.status) +
-      '<div style="color:var(--muted);margin-top:6px">' + U.esc(p.category) + ' · ' + U.esc(p.size || '-') + '</div></div></div>' +
+      '<div style="color:var(--muted);margin-top:6px">' + U.esc(p.category) + ' Â· ' + U.esc(p.size || '-') + '</div></div></div>' +
       '<div class="section-title">Posisi Stok</div><div class="detail-grid">' +
       [['Gudang', s.warehouse], ['Dalam Proses', s.process], ['Menunggu QC', s.qc], ['Siap Kirim', s.ready], ['Rusak/Afkir', s.damaged], ['Total', s.total]]
         .map(x => '<div class="detail-item"><small>' + x[0] + '</small><strong>' + U.fmt(x[1]) + ' pcs</strong></div>').join('') +
@@ -308,14 +338,14 @@ window.Views = (function () {
       const cats = DB.getCategories();
       return UI.pageHead('Database Produk', 'Kode SKU, kategori, foto, ukuran & status produk (SKU diurutkan dari nomor terkecil)',
         (can('products.create') ? '<button class="btn btn-primary" data-act="add">+ Tambah Produk</button>' : '') +
-        (can('products.create') || can('products.update') ? '<button class="btn" data-act="cats">🏷️ Kelola Kategori</button>' : '')) +
+        (can('products.create') || can('products.update') ? '<button class="btn" data-act="cats">ðŸ·ï¸ Kelola Kategori</button>' : '')) +
         '<div class="toolbar"><input id="pSearch" placeholder="Cari SKU / nama..." value="' + U.esc(state.productSearch) + '">' +
         '<select id="pCat"><option value="">Semua kategori</option>' + cats.map(c => '<option' + (state.productCat === c ? ' selected' : '') + '>' + U.esc(c) + '</option>').join('') + '</select>' +
         '<select id="pStatus"><option value="">Semua status</option>' + ['Gudang', 'Proses Obat', 'Barang Jadi'].map(s => '<option' + (state.productStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
         '<div class="card"><div class="card-body">' +
         UI.table({
           columns: [
-            { label: 'Foto', render: r => '<img class="photo-preview" style="width:40px;height:40px" src="' + U.esc(r.photo || DB.svgPhoto('📦', '#f1f5f9')) + '">' },
+            { label: 'Foto', render: r => '<img class="photo-preview" style="width:40px;height:40px" src="' + U.esc(r.photo || DB.svgPhoto('ðŸ“¦', '#f1f5f9')) + '">' },
             { label: 'SKU', render: r => '<strong>' + U.esc(r.sku) + '</strong>' },
             { label: 'Nama Produk', render: r => U.esc(r.name) + '<br><small style="color:var(--muted)">' + U.esc(r.size || '-') + '</small>' },
             { label: 'Kategori', key: 'category' },
@@ -389,7 +419,7 @@ window.Views = (function () {
       return UI.pageHead('Barang Masuk (Inbound)', 'Pencatatan semua barang yang diterima perusahaan',
         (can('inbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Masuk</button>' : '') +
         (can('inbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="inbound" disabled>Hapus Terpilih (0)</button>' : '') +
-        (can('inbound.view') ? '<button class="btn" data-act="excel">⬇ Excel</button><button class="btn" data-act="pdf">⬇ PDF</button>' : '')) +
+        (can('inbound.view') ? '<button class="btn" data-act="excel">â¬‡ Excel</button><button class="btn" data-act="pdf">â¬‡ PDF</button>' : '')) +
         '<div class="toolbar"><input id="inSearch" placeholder="Cari produk / supplier / petugas..." value="' + U.esc(state.inSearch) + '">' +
         '<input type="date" id="inDate" value="' + U.esc(state.inDate) + '"><div class="spacer"></div>' +
         '<strong>Total masuk: ' + U.fmt(U.sum(rows, r => r.qty)) + ' pcs</strong></div>' +
@@ -465,10 +495,10 @@ window.Views = (function () {
       if (state.outDate) rows = rows.filter(x => x.date === state.outDate);
       rows.sort((a, b) => b.date.localeCompare(a.date));
       const pick = selectable('outbound', rows);
-      return UI.pageHead('Barang Keluar (Outbound)', 'Customer, borong obat, servis, pinjaman sampel pengrajin, dan afkir — dicatat tim gudang',
+      return UI.pageHead('Barang Keluar (Outbound)', 'Customer, borong obat, servis, pinjaman sampel pengrajin, dan afkir â€” dicatat tim gudang',
         (can('outbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Keluar</button>' : '') +
         (can('outbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="outbound" disabled>Hapus Terpilih (0)</button>' : '') +
-        '<button class="btn" data-act="excel">⬇ Excel</button><button class="btn" data-act="pdf">⬇ PDF</button>') +
+        '<button class="btn" data-act="excel">â¬‡ Excel</button><button class="btn" data-act="pdf">â¬‡ PDF</button>') +
         '<div class="toolbar"><input id="outSearch" placeholder="Cari produk / tujuan / no SJ..." value="' + U.esc(state.outSearch) + '">' +
         '<select id="outType"><option value="">Semua jenis</option>' + OUT_TYPES.map(t => '<option' + (state.outType === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
         '<input type="date" id="outDate" value="' + U.esc(state.outDate) + '"><div class="spacer"></div>' +
@@ -566,7 +596,7 @@ window.Views = (function () {
       rows = filterRows(rows, state.artisanSearch, ['id', 'name', 'address', 'phone', 'specialization']);
       if (state.artisanActive === 'aktif') rows = rows.filter(a => a.active);
       if (state.artisanActive === 'nonaktif') rows = rows.filter(a => !a.active);
-      return UI.pageHead('Manajemen Pengrajin', 'Data pengrajin diurutkan berdasarkan nama (A–Z), spesialisasi & monitoring pekerjaan',
+      return UI.pageHead('Manajemen Pengrajin', 'Data pengrajin diurutkan berdasarkan nama (Aâ€“Z), spesialisasi & monitoring pekerjaan',
         (can('artisans.create') ? '<button class="btn btn-primary" data-act="add">+ Tambah Pengrajin</button>' : '')) +
         '<div class="toolbar"><input id="aSearch" placeholder="Cari nama / telepon / spesialisasi..." value="' + U.esc(state.artisanSearch) + '">' +
         '<select id="aActive"><option value="">Semua status</option><option' + (state.artisanActive === 'aktif' ? ' selected' : '') + ' value="aktif">Aktif</option><option' + (state.artisanActive === 'nonaktif' ? ' selected' : '') + ' value="nonaktif">Nonaktif</option></select></div>' +
@@ -574,13 +604,13 @@ window.Views = (function () {
           const s = DB.artisanStats(a.id);
           return '<div class="card"><div class="card-body">' +
             '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><strong style="font-size:16px">' + U.esc(a.name) + '</strong>' +
-            '<div style="color:var(--muted);font-size:12px">' + U.esc(a.id) + ' · ' + U.esc(a.specialization || '-') + '</div></div>' + U.badge(a.active ? 'Aktif' : 'Nonaktif') + '</div>' +
+            '<div style="color:var(--muted);font-size:12px">' + U.esc(a.id) + ' Â· ' + U.esc(a.specialization || '-') + '</div></div>' + U.badge(a.active ? 'Aktif' : 'Nonaktif') + '</div>' +
             '<div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap">' +
             '<span class="badge badge-blue">Diterima ' + U.fmt(s.received) + '</span>' +
             '<span class="badge ' + (s.unfinished > 0 ? 'badge-yellow' : 'badge-green') + '">Belum selesai ' + U.fmt(s.unfinished) + '</span>' +
             '<span class="badge badge-purple">Afkir ' + U.fmt(s.afkir) + '</span>' +
             (s.lateCount ? '<span class="badge badge-red">Terlambat ' + s.lateCount + '</span>' : '') + '</div>' +
-            '<div style="font-size:12px;color:var(--muted)">📞 ' + U.esc(a.phone || '-') + '<br>📍 ' + U.esc(a.address || '-') + '</div>' +
+            '<div style="font-size:12px;color:var(--muted)">ðŸ“ž ' + U.esc(a.phone || '-') + '<br>ðŸ“ ' + U.esc(a.address || '-') + '</div>' +
             '<div style="margin-top:14px;display:flex;gap:6px"><a class="btn btn-sm btn-primary" href="#/artisans/' + a.id + '">Lihat Detail</a>' +
             (can('artisans.update') ? '<button class="btn btn-sm" data-act="edit" data-id="' + a.id + '">Edit</button>' : '') +
             (can('artisans.delete') ? '<button class="btn btn-sm btn-danger" data-act="del" data-id="' + a.id + '">Hapus</button>' : '') + '</div>' +
@@ -613,20 +643,20 @@ window.Views = (function () {
       const dists = DB.all('distributions').filter(d => d.artisanId === a.id).sort((x, y) => y.date.localeCompare(x.date));
       const rets = DB.all('returns').filter(r => r.artisanId === a.id).sort((x, y) => y.date.localeCompare(x.date));
       const t = U.today();
-      return UI.pageHead(a.name, a.id + ' · ' + (a.specialization || '-') + ' · ' + (a.address || '-'),
-        '<a class="btn" href="#/artisans">← Kembali</a>' +
+      return UI.pageHead(a.name, a.id + ' Â· ' + (a.specialization || '-') + ' Â· ' + (a.address || '-'),
+        '<a class="btn" href="#/artisans">â† Kembali</a>' +
         (can('artisans.update') ? '<button class="btn" data-act="edit">Edit Pengrajin</button>' : '') +
         (can('artisans.delete') ? '<button class="btn btn-danger" data-act="del">Hapus Pengrajin</button>' : '') +
         (can('distributions.create') ? '<button class="btn btn-primary" data-act="distribute">+ Distribusi Barang</button>' : '') +
-        (can('returns.create') ? '<button class="btn btn-success" data-act="return">↩ Terima Barang Kembali</button>' : '')) +
+        (can('returns.create') ? '<button class="btn btn-success" data-act="return">â†© Terima Barang Kembali</button>' : '')) +
         '<div class="grid grid-stats">' +
-        UI.statCard({ label: 'Barang Diterima', value: U.fmt(s.received), icon: '📥', accent: 'in' }) +
-        UI.statCard({ label: 'Sudah Selesai', value: U.fmt(s.finished), icon: '✅' }) +
-        UI.statCard({ label: 'Belum Selesai', value: U.fmt(s.unfinished), icon: '🔨', accent: 'process' }) +
-        UI.statCard({ label: 'Dikembalikan Afkir', value: U.fmt(s.afkir), icon: '⚠️', accent: 'bad' }) +
-        UI.statCard({ label: 'Pekerjaan Terlambat', value: s.lateCount + ' item', sub: U.fmt(s.lateQty) + ' pcs', icon: '🕒', accent: 'out' }) +
+        UI.statCard({ label: 'Barang Diterima', value: U.fmt(s.received), icon: 'ðŸ“¥', accent: 'in' }) +
+        UI.statCard({ label: 'Sudah Selesai', value: U.fmt(s.finished), icon: 'âœ…' }) +
+        UI.statCard({ label: 'Belum Selesai', value: U.fmt(s.unfinished), icon: 'ðŸ”¨', accent: 'process' }) +
+        UI.statCard({ label: 'Dikembalikan Afkir', value: U.fmt(s.afkir), icon: 'âš ï¸', accent: 'bad' }) +
+        UI.statCard({ label: 'Pekerjaan Terlambat', value: s.lateCount + ' item', sub: U.fmt(s.lateQty) + ' pcs', icon: 'ðŸ•’', accent: 'out' }) +
         '</div><br>' +
-        (s.nearDeadline.length ? '<div class="notice">⏰ ' + s.nearDeadline.length + ' pekerjaan mendekati deadline 3 hari.</div><br>' : '') +
+        (s.nearDeadline.length ? '<div class="notice">â° ' + s.nearDeadline.length + ' pekerjaan mendekati deadline 3 hari.</div><br>' : '') +
         '<div class="card"><div class="card-head"><h3>Barang Sedang Dikerjakan</h3></div><div class="card-body">' +
         UI.table({ columns: [
           { label: 'Tanggal', render: r => U.dateID(r.date) },
@@ -646,7 +676,7 @@ window.Views = (function () {
           { label: 'Catatan', key: 'notes' }
         ], rows: rets, empty: 'Belum ada barang kembali.' }) + '</div></div>' +
         '<div class="section-title">Catatan Pengrajin</div><div class="card card-body">' + U.esc(a.notes || '-') +
-        '<br><small style="color:var(--muted)">Spesialisasi: ' + U.esc((a.productTypes || []).join(', ')) + ' · Telepon: ' + U.esc(a.phone || '-') + '</small></div>';
+        '<br><small style="color:var(--muted)">Spesialisasi: ' + U.esc((a.productTypes || []).join(', ')) + ' Â· Telepon: ' + U.esc(a.phone || '-') + '</small></div>';
     },
     bind(root, params) {
       const a = DB.get('artisans', params.id);
