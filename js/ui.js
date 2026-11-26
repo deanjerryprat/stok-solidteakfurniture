@@ -1,4 +1,4 @@
-/* ui.js — komponen tampilan: modal, form, tabel, toast */
+/* ui.js - komponen tampilan: modal, form, tabel, toast */
 window.UI = (function () {
   const root = () => U.$('#modalRoot');
 
@@ -16,7 +16,7 @@ window.UI = (function () {
 
   function modalHead(title) {
     return '<div class="modal-head"><h3>' + U.esc(title) + '</h3>' +
-      '<button class="icon-btn" data-close title="Tutup">✕</button></div>';
+      '<button class="icon-btn" data-close title="Tutup">X</button></div>';
   }
 
   function fieldHTML(f, values) {
@@ -39,7 +39,7 @@ window.UI = (function () {
       input = '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f_' + f.key + '" data-key="' + f.key + '"' + (v ? ' checked' : '') + ' style="width:auto"> ' + U.esc(f.checkLabel || 'Ya') + '</label>';
     } else if (f.type === 'file') {
       input = '<div style="display:flex;gap:10px;align-items:center">' +
-        '<img class="photo-preview" id="preview_' + f.key + '" src="' + (v || DB.svgPhoto('📦', '#f1f5f9')) + '">' +
+        '<img class="photo-preview" id="preview_' + f.key + '" src="' + (v || DB.svgPhoto('Produk', '#f1f5f9')) + '">' +
         '<input type="file" id="f_' + f.key + '" data-key="' + f.key + '" data-file="1" accept="' + (f.accept || 'image/*') + '">' +
         '<input type="hidden" data-key="' + f.key + '_value" value="' + U.esc(v) + '"></div>';
     } else if (f.type === 'readonly') {
@@ -122,7 +122,7 @@ window.UI = (function () {
 
   function statCard(o) {
     return '<div class="card stat-card ' + (o.accent ? 'accent-' + o.accent : '') + '">' +
-      '<span class="stat-icon">' + (o.icon || '📦') + '</span>' +
+      '<span class="stat-icon">' + (o.icon || 'Produk') + '</span>' +
       '<span class="label">' + U.esc(o.label) + '</span>' +
       '<span class="value">' + U.esc(o.value) + '</span>' +
       (o.sub ? '<span class="sub">' + U.esc(o.sub) + '</span>' : '') + '</div>';
@@ -132,7 +132,7 @@ window.UI = (function () {
     const cols = opts.columns || [];
     const rows = opts.rows || [];
     const actions = opts.actions || [];
-    if (!rows.length) return '<div class="empty"><span class="empty-icon">📭</span>' + U.esc(opts.empty || 'Belum ada data.') + '</div>';
+    if (!rows.length) return '<div class="empty"><span class="empty-icon"></span>' + U.esc(opts.empty || 'Belum ada data.') + '</div>';
     const head = cols.map(c => '<th class="' + (c.align === 'right' ? 'num' : '') + '">' + (c.htmlLabel || U.esc(c.label)) + '</th>').join('') +
       (actions.length ? '<th>Aksi</th>' : '');
     const body = rows.map(r => '<tr>' + cols.map(c =>
