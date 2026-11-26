@@ -1,32 +1,32 @@
-/* app.js — login, navigasi (hash router), dan hak akses */
+/* app.js - login, navigasi (hash router), dan hak akses */
 window.App = (function () {
   const NAV = [
     { group: 'Utama', items: [
-      { key: 'dashboard', label: 'Dashboard', icon: '📊', perm: 'dashboard' },
-      { key: 'search', label: 'Pencarian', icon: '🔍', perm: 'search' },
-      { key: 'notifications', label: 'Notifikasi', icon: '🔔', perm: 'notifications' }
+      { key: 'dashboard', label: 'Dashboard', icon: 'Laporan', perm: 'dashboard' },
+      { key: 'search', label: 'Pencarian', icon: 'Cari', perm: 'search' },
+      { key: 'notifications', label: 'Notifikasi', icon: 'Notifikasi', perm: 'notifications' }
     ]},
     { group: 'Gudang', items: [
-      { key: 'products', label: 'Database Produk', icon: '📦', perm: 'products.view' },
-      { key: 'inbound', label: 'Barang Masuk', icon: '📥', perm: 'inbound.view' },
-      { key: 'outbound', label: 'Barang Keluar', icon: '📤', perm: 'outbound.view' },
-      { key: 'boxes', label: 'Stok Box & Kubikasi', icon: '📐', perm: 'boxes.view' }
+      { key: 'products', label: 'Database Produk', icon: 'Produk', perm: 'products.view' },
+      { key: 'inbound', label: 'Barang Masuk', icon: 'Masuk', perm: 'inbound.view' },
+      { key: 'outbound', label: 'Barang Keluar', icon: 'Keluar', perm: 'outbound.view' },
+      { key: 'boxes', label: 'Stok Box & Kubikasi', icon: 'Box', perm: 'boxes.view' }
     ]},
     { group: 'Produksi', items: [
-      { key: 'artisans', label: 'Pengrajin', icon: '👷', perm: 'artisans.view' },
-      { key: 'distributions', label: 'Distribusi & Tugas Borong', icon: '🔨', perm: 'distributions.view' },
-      { key: 'returns', label: 'Barang Kembali & QC', icon: '↩️', perm: 'returns.view' },
-      { key: 'spk', label: 'SPK', icon: '📝', perm: 'spk.view' }
+      { key: 'artisans', label: 'Pengrajin', icon: 'Pengrajin', perm: 'artisans.view' },
+      { key: 'distributions', label: 'Distribusi & Tugas Borong', icon: 'Produksi', perm: 'distributions.view' },
+      { key: 'returns', label: 'Barang Kembali & QC', icon: 'Kembali', perm: 'returns.view' },
+      { key: 'spk', label: 'SPK', icon: 'SPK', perm: 'spk.view' }
     ]},
     { group: 'Keuangan', items: [
-      { key: 'payroll', label: 'Gaji Karyawan', icon: '💰', perm: 'payroll.view' },
-      { key: 'borong', label: 'Tugas & Gaji Borong', icon: '🧹', perm: 'borong.view' }
+      { key: 'payroll', label: 'Gaji Karyawan', icon: 'Gaji', perm: 'payroll.view' },
+      { key: 'borong', label: 'Tugas & Gaji Borong', icon: 'Borong', perm: 'borong.view' }
     ]},
     { group: 'Laporan & Sistem', items: [
-      { key: 'import', label: 'Import Excel', icon: '⬆️', perm: 'import.view' },
-      { key: 'reports', label: 'Laporan', icon: '📑', perm: 'reports.view' },
-      { key: 'users', label: 'Pengguna', icon: '👤', perm: 'users.view' },
-      { key: 'settings', label: 'Pengaturan', icon: '⚙️', perm: 'users.view' }
+      { key: 'import', label: 'Import Excel', icon: '', perm: 'import.view' },
+      { key: 'reports', label: 'Laporan', icon: 'Laporan', perm: 'reports.view' },
+      { key: 'users', label: 'Pengguna', icon: 'Pengguna', perm: 'users.view' },
+      { key: 'settings', label: 'Pengaturan', icon: 'Setelan', perm: 'users.view' }
     ]}
   ];
 
