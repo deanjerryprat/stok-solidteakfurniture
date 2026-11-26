@@ -208,6 +208,8 @@ window.Views = (function () {
         data.ratePacking = U.num(data.ratePacking);
         data.category = String(data.category || '').trim();
         if (data.category) DB.addCategory(data.category);
+        // Foto yang tidak diubah tidak perlu dikirim ulang (bisa beberapa MB).
+        if (existing && data.photo === existing.photo) delete data.photo;
         if (existing) { DB.update('products', existing.id, data); UI.toast('Produk diperbarui', 'success'); }
         else { DB.insert('products', data); UI.toast('Produk ditambahkan', 'success'); }
         closeFn(); App.refresh();
