@@ -19,6 +19,44 @@ window.UI = (function () {
       '<button class="icon-btn" data-close title="Tutup">X</button></div>';
   }
 
+  // Foto besar/HEIC sering membuat preview kosong dan Simpan terasa tidak merespons.
+  // Kompres ke JPG sebelum disimpan: target 100-200 KB, batas 300 KB.
+  function compressImage(file, done, fail) {
+    const reader = new FileReader();
+    reader.onerror = () => fail('File foto tidak bisa dibaca');
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => fail('Format gambar tidak didukung browser. Simpan foto sebagai JPG/PNG.');
+      img.onload = () => {
+        try {
+          const base = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const qualities = [0.82, 0.75, 0.68, 0.6, 0.52];
+          const scales = [base, base * 0.85, base * 0.7, base * 0.55];
+          let best = null;
+          for (const scale of scales) {
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            for (const q of qualities) {
+              const url = canvas.toDataURL('image/jpeg', q);
+              if (!best || url.length < best.length) best = url;
+              if (url.length <= 220000) { done(url); return; }
+            }
+          }
+          if (best && best.length > 409600) { fail('Foto tetap terlalu besar setelah dikompres. Pakai foto lebih kecil.'); return; }
+          done(best);
+        } catch (e) { fail('Gagal mengompres foto: ' + (e.message || e)); }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function fieldHTML(f, values) {
     const v = (values && values[f.key] !== undefined) ? values[f.key] : (f.value !== undefined ? f.value : '');
     const req = f.required ? ' required' : '';
@@ -40,8 +78,9 @@ window.UI = (function () {
     } else if (f.type === 'file') {
       input = '<div style="display:flex;gap:10px;align-items:center">' +
         '<img class="photo-preview" id="preview_' + f.key + '" src="' + (v || DB.svgPhoto('Produk', '#f1f5f9')) + '">' +
-        '<input type="file" id="f_' + f.key + '" data-key="' + f.key + '" data-file="1" accept="' + (f.accept || 'image/*') + '">' +
-        '<input type="hidden" data-key="' + f.key + '_value" value="' + U.esc(v) + '"></div>';
+        '<input type="file" id="f_' + f.key + '" data-key="' + f.key + '" data-file="1" accept="' + (f.accept || 'image/jpeg,image/png,image/webp,image/*') + '">' +
+        '<input type="hidden" data-key="' + f.key + '_value" value="' + U.esc(v) + '"></div>' +
+        '<div class="hint" id="status_' + f.key + '" style="margin-top:6px">Foto dikompres otomatis ke JPG sekitar 100-200 KB (maks 300 KB). Foto lama dipakai bila tidak diganti.</div>';
     } else if (f.type === 'readonly') {
       input = '<input type="text" id="f_' + f.key + '" value="' + U.esc(v) + '" readonly style="background:#f8fafc">';
     } else {
@@ -66,19 +105,35 @@ window.UI = (function () {
     openModal(html, opts);
 
     U.$$('[data-file]', root()).forEach(inp => inp.addEventListener('change', e => {
-      const f = e.target.files[0];
-      if (!f) return;
+      const file = e.target.files[0];
+      if (!file) return;
       const key = inp.dataset.key;
-      const reader = new FileReader();
-      reader.onload = () => {
-        U.$('input[data-key="' + key + '_value"]', root()).value = reader.result;
-        U.$('#preview_' + key, root()).src = reader.result;
-      };
-      reader.readAsDataURL(f);
+      const status = U.$('#status_' + key, root());
+      const submitBtn = U.$('#modalForm button[type="submit"]', root());
+      inp.dataset.busy = '1';
+      if (submitBtn) submitBtn.disabled = true;
+      if (status) { status.textContent = 'Memproses foto...'; status.style.color = 'var(--muted)'; }
+      compressImage(file, url => {
+        const hidden = U.$('input[data-key="' + key + '_value"]', root());
+        const preview = U.$('#preview_' + key, root());
+        if (hidden) hidden.value = url;
+        if (preview) preview.src = url;
+        const kb = Math.round(url.length * 3 / 4 / 1024);
+        if (status) { status.textContent = 'Foto siap: ' + kb + ' KB (JPG)'; status.style.color = '#16a34a'; }
+        delete inp.dataset.busy;
+        if (submitBtn) submitBtn.disabled = false;
+      }, msg => {
+        if (status) { status.textContent = msg; status.style.color = '#dc2626'; }
+        toast('Foto gagal diproses: ' + msg, 'error');
+        e.target.value = '';
+        delete inp.dataset.busy;
+        if (submitBtn) submitBtn.disabled = false;
+      });
     }));
 
     U.$('#modalForm', root()).addEventListener('submit', e => {
       e.preventDefault();
+      if (U.$('[data-file][data-busy="1"]', root())) { toast('Tunggu foto selesai diproses', 'warning'); return; }
       const data = {};
       let missing = null;
       fields.forEach(f => {
