@@ -9,7 +9,7 @@
 
    JANGAN pakai secret key (sb_secret_...) / service_role.
 
-   Publishable key memang boleh terlihat publik — keamanan data
+   Publishable key memang boleh terlihat publik - keamanan data
    dijaga oleh RLS policy di Supabase, bukan oleh kerahasiaan key.
    ============================================================ */
 window.SUPABASE_CONFIG = {
