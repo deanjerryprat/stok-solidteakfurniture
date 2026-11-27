@@ -14,7 +14,7 @@ Panduan ini untuk menyambungkan **semua pembaruan terbaru** ke mode online:
 
 ## 0. Persiapan
 
-1. **Backup dulu.** Di aplikasi: login -> menu **Pengaturan** -> tombol ** Backup JSON**. Simpan file backup-nya.
+1. **Backup dulu.** Di aplikasi: login -> menu **Pengaturan** -> tombol **Backup JSON**. Simpan file backup-nya.
 2. Pastikan aplikasi sudah memakai project Supabase yang benar. URL dan publishable key sudah tertanam di `js/config.js`.
 3. **Jangan pernah pakai secret key** (`sb_secret_...` / `service_role`). Pakai `sb_publishable_...` atau anon key lama (`eyJ...`).
 4. Setelah update, browser wajib **Ctrl + F5** (hard reload) supaya file `?v=25` termuat.
@@ -124,7 +124,7 @@ Kalau tetap ingin mulai bersih, ada dua pilihan:
 
 ### Opsi A - Reset data saja (disarankan)
 
-1. Backup dulu lewat aplikasi: **Pengaturan ->  Backup JSON**.
+1. Backup dulu lewat aplikasi: **Pengaturan -> Backup JSON**.
 2. Jalankan `supabase/reset-data.sql`. Ini mengosongkan semua baris tetapi **tabel, kolom, GRANT, RLS, dan fungsi tetap ada**.
 3. Jalankan `supabase/schema.sql` untuk mengembalikan 5 akun bawaan.
 4. Di aplikasi, buka **Pengaturan -> Kembali ke mode lokal -> Aktifkan Supabase**. Data lokal yang Anda simpan akan otomatis di-upload ke Supabase yang sudah kosong.
@@ -210,7 +210,7 @@ git push -u origin main
    - Menu **Distribusi & Tugas Borong** -> form ada **Admin yang Menangani**.
    - Tombol **Tugas Borong Harian** -> form ada admin, karyawan, pemborong, Target/Selesai.
    - Menu **Gaji Karyawan** -> tabel ada kolom **Jabatan**.
-   - Menu **Barang Kembali & QC** -> tab **Kembali Borong / Sampel** dan aksi **Buat Masuk** tersedia.
+   - Menu **Barang Kembali & QC** -> tab **Borong / Sampel** dan aksi **Buat Masuk** tersedia.
    - Menu **Stok Box & Kubikasi** -> bisa memilih barang dari Database Produk, mengisi ukuran sendiri, dan melihat total kubikasi.
 5. Buka **DevTools -> Console** (F12). Tidak boleh ada error `404`, `400`, atau `permission denied`.
 
