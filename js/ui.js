@@ -16,7 +16,7 @@ window.UI = (function () {
 
   function modalHead(title) {
     return '<div class="modal-head"><h3>' + U.esc(title) + '</h3>' +
-      '<button class="icon-btn" data-close title="Tutup">X</button></div>';
+      '<button class="icon-btn" data-close title="Tutup" aria-label="Tutup"><span class="close-x"></span></button></div>';
   }
 
   // Foto besar/HEIC sering membuat preview kosong dan Simpan terasa tidak merespons.
@@ -177,7 +177,6 @@ window.UI = (function () {
 
   function statCard(o) {
     return '<div class="card stat-card ' + (o.accent ? 'accent-' + o.accent : '') + '">' +
-      '<span class="stat-icon">' + (o.icon || 'Produk') + '</span>' +
       '<span class="label">' + U.esc(o.label) + '</span>' +
       '<span class="value">' + U.esc(o.value) + '</span>' +
       (o.sub ? '<span class="sub">' + U.esc(o.sub) + '</span>' : '') + '</div>';
@@ -187,7 +186,7 @@ window.UI = (function () {
     const cols = opts.columns || [];
     const rows = opts.rows || [];
     const actions = opts.actions || [];
-    if (!rows.length) return '<div class="empty"><span class="empty-icon"></span>' + U.esc(opts.empty || 'Belum ada data.') + '</div>';
+    if (!rows.length) return '<div class="empty">' + U.esc(opts.empty || 'Belum ada data.') + '</div>';
     const head = cols.map(c => '<th class="' + (c.align === 'right' ? 'num' : '') + '">' + (c.htmlLabel || U.esc(c.label)) + '</th>').join('') +
       (actions.length ? '<th>Aksi</th>' : '');
     const body = rows.map(r => '<tr>' + cols.map(c =>
