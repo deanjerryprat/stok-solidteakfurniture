@@ -459,7 +459,7 @@ Object.assign(window.Views, (function () {
           }) + '</div></div>';
       }
       return '<div class="tabs">' +
-        [['kembali', 'Barang Kembali'], ['kembali-lain', 'Kembali Borong / Sampel'], ['qc', 'Quality Control'], ['barang-jadi', 'Barang Jadi']].map(x =>
+        [['kembali', 'Barang Kembali'], ['kembali-lain', 'Borong / Sampel'], ['qc', 'Quality Control'], ['barang-jadi', 'Barang Jadi']].map(x =>
           '<button class="tab ' + (tab === x[0] ? 'active' : '') + '" data-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' + body;
     },
     bind(root) {
@@ -658,7 +658,7 @@ Object.assign(window.Views, (function () {
       const rows = reportRows();
       const title = { masuk: 'Laporan Barang Masuk', keluar: 'Laporan Barang Keluar', stok: 'Laporan Stok Keseluruhan', pengrajin: 'Laporan Per Pengrajin' }[state.reportTab];
       return UI.pageHead('Laporan', 'Filter tanggal, produk, kategori, pengrajin & status',
-        '<button class="btn" data-act="excel"> Export Excel</button><button class="btn" data-act="pdf"> Export PDF</button>') +
+        '<button class="btn" data-act="excel">Export Excel</button><button class="btn" data-act="pdf">Export PDF</button>') +
         '<div class="tabs">' + [['masuk', 'Barang Masuk'], ['keluar', 'Barang Keluar'], ['stok', 'Stok Keseluruhan'], ['pengrajin', 'Per Pengrajin']].map(x =>
           '<button class="tab ' + (state.reportTab === x[0] ? 'active' : '') + '" data-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
         '<div class="toolbar"><label>Dari <input type="date" id="rFrom" value="' + U.esc(state.from) + '"></label>' +
@@ -704,7 +704,7 @@ Object.assign(window.Views, (function () {
       return UI.pageHead('Pencarian', 'Hasil untuk: "' + U.esc(q || '-') + '"', '') +
         '<div class="toolbar"><input id="qSearch" style="flex:1" placeholder="Cari SKU, nama produk, pengrajin, atau tanggal..." value="' + U.esc(q) + '"></div>' +
         groups.map(g => '<div class="card" style="margin-bottom:12px"><div class="card-head"><h3>' + g[0] + ' (' + g[1].length + ')</h3></div><div class="card-body">' +
-          (g[1].length ? g[1].slice(0, 8).map(x => '<div class="timeline-item"><span>Cari</span><div><a href="' + g[2] + (g[0] === 'Pengrajin' ? '/' + x.id : '') + '">' + U.esc(g[3](x)) + '</a><br><small>' + U.dateID(x.date || x.createdAt) + '</small></div></div>').join('') :
+          (g[1].length ? g[1].slice(0, 8).map(x => '<div class="timeline-item"><div><a href="' + g[2] + (g[0] === 'Pengrajin' ? '/' + x.id : '') + '">' + U.esc(g[3](x)) + '</a><br><small>' + U.dateID(x.date || x.createdAt) + '</small></div></div>').join('') :
             '<div style="color:var(--muted)">Tidak ada hasil</div>') + '</div></div>').join('');
     },
     bind(root) {
@@ -739,9 +739,9 @@ Object.assign(window.Views, (function () {
       const list = alerts(), read = readList();
       const unread = list.filter(a => !read.includes(a.key)).length;
       return UI.pageHead('Notifikasi Otomatis', unread + ' belum dibaca dari ' + list.length + ' notifikasi',
-        '<button class="btn" data-act="readAll"> Tandai semua dibaca</button>') +
+        '<button class="btn" data-act="readAll">Tandai semua dibaca</button>') +
         '<div class="card"><div class="card-body">' + (list.length ? list.map(a =>
-          '<div class="timeline-item" style="opacity:' + (read.includes(a.key) ? '.55' : '1') + '"><span>' + a.icon + '</span><div style="flex:1">' +
+          '<div class="timeline-item" style="opacity:' + (read.includes(a.key) ? '.55' : '1') + '"><div style="flex:1">' +
           '<strong>' + U.esc(a.title) + '</strong> ' + (read.includes(a.key) ? '' : '<span class="badge badge-blue">Baru</span>') +
           '<div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + '  |  <a href="' + a.href + '">Lihat detail</a></small></div>' +
           '<button class="link-btn" data-act="read" data-key="' + U.esc(a.key) + '">Tandai dibaca</button></div>').join('') :
@@ -819,7 +819,7 @@ Object.assign(window.Views, (function () {
       const bk = DB.getBackupConfig() || {};
       const online = DB.isSupabase();
       return UI.pageHead('Pengaturan Database', 'Hubungkan aplikasi ke Supabase (database bersama gratis)',
-        online ? '<span class="badge badge-green"> MODE SUPABASE</span>' : '<span class="badge badge-yellow"> MODE LOKAL</span>') +
+        online ? '<span class="badge badge-green">MODE SUPABASE</span>' : '<span class="badge badge-yellow">MODE LOKAL</span>') +
         '<div class="card"><div class="card-head"><h3>Koneksi Supabase</h3></div><div class="card-body">' +
         '<div class="notice">Status saat ini: <strong>' + (online ? 'Terhubung ke Supabase - data bersama lintas perangkat & user' : 'Data tersimpan di browser perangkat ini saja') + '</strong></div><br>' +
         '<div class="form-grid">' +
@@ -851,7 +851,7 @@ Object.assign(window.Views, (function () {
         '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn" id="bkSave">Simpan Pengaturan</button>' +
         '<button class="btn btn-primary" id="bkNow">Backup Sekarang</button>' +
-        '<button class="btn" id="bkJson"> Unduh Cadangan JSON</button>' +
+        '<button class="btn" id="bkJson">Unduh Cadangan JSON</button>' +
         (bk.sheetUrl ? '<a class="btn" href="' + U.esc(bk.sheetUrl) + '" target="_blank" rel="noopener">Buka Google Sheet</a>' : '') +
         '</div><div id="bkStatus" class="hint" style="margin-top:10px">' +
         (bk.sheetUrl ? 'Sheet: ' + U.esc(bk.sheetUrl) : 'Belum ada Google Sheet tertaut.') + '</div>' +
@@ -1095,8 +1095,8 @@ Object.assign(window.Views, (function () {
           '<div class="empty">Belum ada nama karyawan. Klik "+ Catat Gaji Harian" untuk menambah.</div>') +
         '</div></div><br>' +
         '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
-        '<button class="btn btn-sm" data-act="wageExcel"> Excel</button>' +
-        '<button class="btn btn-sm" data-act="wagePdf"> PDF</button></span></div><div class="card-body">' +
+        '<button class="btn btn-sm" data-act="wageExcel">Excel</button>' +
+        '<button class="btn btn-sm" data-act="wagePdf">PDF</button></span></div><div class="card-body">' +
         '<div class="toolbar"><input id="wageQ" placeholder="Cari nama / jabatan / catatan..." value="' + U.esc(state.payrollQ) + '">' +
         '<input type="date" id="wageFrom" value="' + U.esc(state.payrollFrom) + '">' +
         '<input type="date" id="wageTo" value="' + U.esc(state.payrollTo) + '">' +
@@ -1446,7 +1446,7 @@ Object.assign(window.Views, (function () {
         UI.statCard({ label: 'Packing', value: U.rp(today.packing), sub: 'hari ini', icon: 'Produk' }) +
         '</div><br>' + workMonitorHtml() + '<br>' +
         '<div class="card"><div class="card-head"><h3>Tugas & Catatan Borong</h3><span style="display:flex;gap:8px">' +
-        '<button class="btn btn-sm" data-act="borongExcel"> Excel</button><button class="btn btn-sm" data-act="borongPdf"> PDF</button></span></div><div class="card-body">' +
+        '<button class="btn btn-sm" data-act="borongExcel">Excel</button><button class="btn btn-sm" data-act="borongPdf">PDF</button></span></div><div class="card-body">' +
         '<div class="toolbar"><input id="borongQ" placeholder="Cari admin / karyawan / pemborong..." value="' + U.esc(state.borongQ) + '">' +
         '<input type="date" id="borongFrom" value="' + U.esc(state.borongFrom) + '">' +
         '<input type="date" id="borongTo" value="' + U.esc(state.borongTo) + '">' +
@@ -1802,8 +1802,8 @@ Object.assign(window.Views, (function () {
 
   const importView = {
     render() {
-      return UI.pageHead('Import Excel / CSV', 'Impor dataproduk, barang masuk, dan barang keluar dari file Excel Anda',
-        '<button class="btn" id="impTemplate"> Unduh Template</button>') +
+      return UI.pageHead('Import Excel / CSV', 'Impor data produk, barang masuk, dan barang keluar dari file Excel Anda',
+        '<button class="btn" id="impTemplate">Unduh Template</button>') +
         '<div id="importArea">' + this.area() + '</div>';
     },
     area() {
