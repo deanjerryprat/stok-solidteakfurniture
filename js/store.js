@@ -38,10 +38,16 @@ window.DB = (function () {
   let mode = localStorage.getItem(MODE_KEY) || 'local';
   let sb = null;
 
-  function svgPhoto(emoji, color) {
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">' +
-      '<rect width="160" height="120" fill="' + color + '"/>' +
-      '<text x="80" y="78" font-size="56" text-anchor="middle">' + emoji + '</text></svg>';
+  function svgPhoto(label, color) {
+    const bg = color || '#f1f5f9';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120">' +
+      '<rect width="160" height="120" fill="' + bg + '"/>' +
+      '<g fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="52" y="22" width="56" height="34" rx="4"/>' +
+      '<path d="M48 62h64v12H48z"/>' +
+      '<path d="M56 74v28M104 74v28"/>' +
+      '<path d="M48 88h64"/>' +
+      '</g></svg>';
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
