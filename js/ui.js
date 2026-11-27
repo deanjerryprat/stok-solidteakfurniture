@@ -110,24 +110,43 @@ window.UI = (function () {
       const key = inp.dataset.key;
       const status = U.$('#status_' + key, root());
       const submitBtn = U.$('#modalForm button[type="submit"]', root());
+      const originalLabel = submitBtn ? submitBtn.textContent : 'Simpan';
+      const token = String(Date.now()) + '-' + Math.random();
+      let settled = false;
+      inp.dataset.token = token;
+      const finish = () => {
+        if (settled || inp.dataset.token !== token) return;
+        settled = true;
+        if (inp._compressTimer) { clearTimeout(inp._compressTimer); inp._compressTimer = null; }
+        delete inp.dataset.busy;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalLabel; }
+      };
       inp.dataset.busy = '1';
-      if (submitBtn) submitBtn.disabled = true;
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Memproses foto...'; }
       if (status) { status.textContent = 'Memproses foto...'; status.style.color = 'var(--muted)'; }
+      if (inp._compressTimer) clearTimeout(inp._compressTimer);
+      inp._compressTimer = setTimeout(() => {
+        if (settled || inp.dataset.token !== token) return;
+        if (status) { status.textContent = 'Foto memakan waktu terlalu lama. Coba file lebih kecil.'; status.style.color = '#dc2626'; }
+        toast('Foto gagal diproses: timeout', 'error');
+        e.target.value = '';
+        finish();
+      }, 20000);
       compressImage(file, url => {
+        if (inp.dataset.token !== token) return;
         const hidden = U.$('input[data-key="' + key + '_value"]', root());
         const preview = U.$('#preview_' + key, root());
         if (hidden) hidden.value = url;
         if (preview) preview.src = url;
         const kb = Math.round(url.length * 3 / 4 / 1024);
         if (status) { status.textContent = 'Foto siap: ' + kb + ' KB (JPG)'; status.style.color = '#16a34a'; }
-        delete inp.dataset.busy;
-        if (submitBtn) submitBtn.disabled = false;
+        finish();
       }, msg => {
+        if (inp.dataset.token !== token) return;
         if (status) { status.textContent = msg; status.style.color = '#dc2626'; }
         toast('Foto gagal diproses: ' + msg, 'error');
         e.target.value = '';
-        delete inp.dataset.busy;
-        if (submitBtn) submitBtn.disabled = false;
+        finish();
       });
     }));
 
