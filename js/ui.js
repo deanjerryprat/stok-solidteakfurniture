@@ -119,10 +119,10 @@ window.UI = (function () {
         settled = true;
         if (inp._compressTimer) { clearTimeout(inp._compressTimer); inp._compressTimer = null; }
         delete inp.dataset.busy;
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalLabel; }
+        if (submitBtn) { delete submitBtn.dataset.processing; submitBtn.disabled = false; submitBtn.textContent = originalLabel; }
       };
       inp.dataset.busy = '1';
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Memproses foto...'; }
+      if (submitBtn) { submitBtn.dataset.processing = '1'; submitBtn.textContent = 'Memproses foto...'; }
       if (status) { status.textContent = 'Memproses foto...'; status.style.color = 'var(--muted)'; }
       if (inp._compressTimer) clearTimeout(inp._compressTimer);
       inp._compressTimer = setTimeout(() => {
