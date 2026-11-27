@@ -80,7 +80,8 @@ window.UI = (function () {
         '<img class="photo-preview" id="preview_' + f.key + '" src="' + (v || DB.svgPhoto('Produk', '#f1f5f9')) + '">' +
         '<input type="file" id="f_' + f.key + '" data-key="' + f.key + '" data-file="1" accept="' + (f.accept || 'image/jpeg,image/png,image/webp,image/*') + '">' +
         '<input type="hidden" data-key="' + f.key + '_value" value="' + U.esc(v) + '"></div>' +
-        '<div class="hint" id="status_' + f.key + '" style="margin-top:6px">Foto dikompres otomatis ke JPG sekitar 100-200 KB (maks 300 KB). Foto lama dipakai bila tidak diganti.</div>';
+        '<div class="hint" id="status_' + f.key + '" style="margin-top:6px">Foto dikompres otomatis ke JPG sekitar 100-200 KB (maks 300 KB). Foto lama dipakai bila tidak diganti.</div>' +
+        '<button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;align-self:flex-start">Simpan</button>';
     } else if (f.type === 'readonly') {
       input = '<input type="text" id="f_' + f.key + '" value="' + U.esc(v) + '" readonly style="background:#f8fafc">';
     } else {
