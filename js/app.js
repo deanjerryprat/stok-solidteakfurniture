@@ -45,7 +45,7 @@ window.App = (function () {
       if (!items.length) return '';
       return '<div class="nav-group">' + g.group + '</div>' + items.map(i =>
         '<button class="nav-item ' + (active === i.key ? 'active' : '') + '" data-route="' + i.key + '">' +
-        '<span class="ico">' + i.icon + '</span><span>' + i.label + '</span></button>').join('');
+        '<span>' + i.label + '</span></button>').join('');
     }).join('');
     U.$('#navMenu').innerHTML = html;
     U.$$('#navMenu [data-route]').forEach(b => b.addEventListener('click', () => {
