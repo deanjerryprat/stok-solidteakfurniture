@@ -73,7 +73,7 @@ window.Views = (function () {
   /* ================= DASHBOARD ================= */
   function opsInfoHtml() {
     const o = DB.opsSummary(U.today());
-    const chip = (label, value, icon) => '<div style="min-width:125px"><div style="color:var(--muted);font-size:11px">' + icon + ' ' + label +
+    const chip = (label, value) => '<div style="min-width:125px"><div style="color:var(--muted);font-size:11px">' + label +
       '</div><strong style="font-size:17px">' + U.fmt(value) + '</strong></div>';
     const panel = (title, bucket, empty) => '<div><div class="section-title">' + title + '</div>' +
       (bucket.items.length ? bucket.items.slice(0, 5).map(it =>
@@ -84,13 +84,13 @@ window.Views = (function () {
     return '<div class="card" style="margin-top:16px"><div class="card-head"><h3>Informasi Produksi & Gudang</h3>' +
       '<span class="badge badge-blue">' + U.dateID(o.date) + '</span></div><div class="card-body">' +
       '<div style="display:flex;gap:20px;flex-wrap:wrap">' +
-      chip('Total di luar gudang*', o.outside, 'Borong') +
-      chip('Di gudang', o.warehouse.qty, 'Gudang') +
-      chip('Dikerjakan produksi', o.production.qty, 'Produksi') +
-      chip('Dikontrol gudang (QC)', o.qcPending.qty, 'Cari') +
-      chip('Dipinjam sampel', o.sample.qty, 'Sampel') +
-      chip('Pemborong obat', o.borongObat.qty, 'Obat') +
-      chip('Servis / pengrajin', o.servis.qty, 'Alat') +
+      chip('Total di luar gudang*', o.outside) +
+      chip('Di gudang', o.warehouse.qty) +
+      chip('Dikerjakan produksi', o.production.qty) +
+      chip('Dikontrol gudang (QC)', o.qcPending.qty) +
+      chip('Dipinjam sampel', o.sample.qty) +
+      chip('Pemborong obat', o.borongObat.qty) +
+      chip('Servis / pengrajin', o.servis.qty) +
       '</div><div style="margin-top:6px;color:var(--muted);font-size:11px">* Di luar gudang = proses produksi + QC + pinjaman sampel + borong obat + servis (tidak termasuk afkir/rusak).</div>' +
       '<div class="grid grid-2" style="margin-top:14px">' +
       panel('Barang sedang dikerjakan tim produksi', o.production, 'Tidak ada barang dalam proses.') +
@@ -141,15 +141,15 @@ window.Views = (function () {
           '<div class="progress"><div style="width:' + Math.round(x.s.warehouse / maxStock * 100) + '%"></div></div></div>'
         ).join('') + '</div></div>' +
         '<div class="card"><div class="card-head"><h3>Aktivitas Terbaru</h3></div><div class="card-body">' +
-        activities.map(a => '<div class="timeline-item"><span>' + a.icon + '</span><div><div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + '</small></div></div>').join('') +
+        activities.map(a => '<div class="timeline-item"><div><div>' + U.esc(a.text) + '</div><small>' + U.dateID(a.date) + '</small></div></div>').join('') +
         '</div></div></div><br>' +
         '<div class="grid grid-2">' +
-        '<div class="card"><div class="card-head"><h3>Perhatian Pekerjaan Terlambat</h3><a href="#/distributions" class="link-btn">Lihat semua</a></div><div class="card-body">' +
-        (late.length ? late.map(d => '<div class="timeline-item"><span>Deadline</span><div><div><strong>' + U.esc(aName(d.artisanId)) + '</strong> - ' + U.esc(d.productName) + '</div>' +
+        '<div class="card"><div class="card-head"><h3>Pekerjaan Terlambat</h3><a href="#/distributions" class="link-btn">Lihat semua</a></div><div class="card-body">' +
+        (late.length ? late.map(d => '<div class="timeline-item"><div><div><strong>' + U.esc(aName(d.artisanId)) + '</strong> - ' + U.esc(d.productName) + '</div>' +
           '<small>Target ' + U.dateID(d.targetDate) + '  |  sisa ' + U.fmt(d.qty - U.sum(DB.all('returns').filter(r => r.distributionId === d.id), r => r.qty)) + ' pcs</small></div></div>').join('') :
-          '<div class="empty">Tidak ada pekerjaan terlambat </div>') + '</div></div>' +
+          '<div class="empty">Tidak ada pekerjaan terlambat</div>') + '</div></div>' +
         '<div class="card"><div class="card-head"><h3>Stok Menipis</h3><a href="#/products" class="link-btn">Lihat produk</a></div><div class="card-body">' +
-        (low.length ? low.map(p => '<div class="timeline-item"><span>Produk</span><div><div><strong>' + U.esc(p.name) + '</strong> - ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs</div>' +
+        (low.length ? low.map(p => '<div class="timeline-item"><div><div><strong>' + U.esc(p.name) + '</strong> - ' + U.fmt(DB.stock(p.id).warehouse) + ' pcs</div>' +
           '<small>Minimum ' + U.fmt(p.minStock) + ' pcs</small></div></div>').join('') :
           '<div class="empty">Semua stok aman</div>') + '</div></div></div>' +
         (can('payroll.view') ? '<div class="card" style="margin-top:16px"><div class="card-head"><h3>Gaji Karyawan Harian</h3><a href="#/payroll" class="link-btn">Buka menu gaji</a></div><div class="card-body">' +
@@ -419,7 +419,7 @@ window.Views = (function () {
       return UI.pageHead('Barang Masuk (Inbound)', 'Pencatatan semua barang yang diterima perusahaan',
         (can('inbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Masuk</button>' : '') +
         (can('inbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="inbound" disabled>Hapus Terpilih (0)</button>' : '') +
-        (can('inbound.view') ? '<button class="btn" data-act="excel"> Excel</button><button class="btn" data-act="pdf"> PDF</button>' : '')) +
+        (can('inbound.view') ? '<button class="btn" data-act="excel">Excel</button><button class="btn" data-act="pdf">PDF</button>' : '')) +
         '<div class="toolbar"><input id="inSearch" placeholder="Cari produk / supplier / petugas..." value="' + U.esc(state.inSearch) + '">' +
         '<input type="date" id="inDate" value="' + U.esc(state.inDate) + '"><div class="spacer"></div>' +
         '<strong>Total masuk: ' + U.fmt(U.sum(rows, r => r.qty)) + ' pcs</strong></div>' +
@@ -498,7 +498,7 @@ window.Views = (function () {
       return UI.pageHead('Barang Keluar (Outbound)', 'Customer, borong obat, servis, pinjaman sampel pengrajin, dan afkir - dicatat tim gudang',
         (can('outbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Keluar</button>' : '') +
         (can('outbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="outbound" disabled>Hapus Terpilih (0)</button>' : '') +
-        '<button class="btn" data-act="excel"> Excel</button><button class="btn" data-act="pdf"> PDF</button>') +
+        '<button class="btn" data-act="excel">Excel</button><button class="btn" data-act="pdf">PDF</button>') +
         '<div class="toolbar"><input id="outSearch" placeholder="Cari produk / tujuan / no SJ..." value="' + U.esc(state.outSearch) + '">' +
         '<select id="outType"><option value="">Semua jenis</option>' + OUT_TYPES.map(t => '<option' + (state.outType === t ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
         '<input type="date" id="outDate" value="' + U.esc(state.outDate) + '"><div class="spacer"></div>' +
@@ -662,7 +662,7 @@ window.Views = (function () {
       const rets = DB.all('returns').filter(r => r.artisanId === a.id).sort((x, y) => y.date.localeCompare(x.date));
       const t = U.today();
       return UI.pageHead(a.name, a.id + '  |  ' + (a.specialization || '-') + '  |  ' + (a.address || '-'),
-        '<a class="btn" href="#/artisans"><- Kembali</a>' +
+        '<a class="btn" href="#/artisans">Kembali ke Daftar Pengrajin</a>' +
         (can('artisans.update') ? '<button class="btn" data-act="edit">Edit Pengrajin</button>' : '') +
         (can('artisans.delete') ? '<button class="btn btn-danger" data-act="del">Hapus Pengrajin</button>' : '') +
         (can('distributions.create') ? '<button class="btn btn-primary" data-act="distribute">+ Distribusi Barang</button>' : '') +
