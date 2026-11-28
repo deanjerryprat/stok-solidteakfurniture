@@ -34,7 +34,7 @@ Object.assign(window.Views, (function () {
     distSearch: '', distArtisan: '', distAdmin: '', distStatus: '', returnsTab: 'kembali', spkSearch: '',
     reportTab: 'masuk', from: U.shiftDays(-30), to: U.today(), reportProduct: '', reportCategory: '', reportArtisan: '', reportStatus: '',
     payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '', payrollPosition: '',
-    slipEmployee: '', slipWeek: '', slipBonus: 0, slipDebt: 0, slipLate: 0,
+    slipEmployee: '', slipWeek: '',
     borongQ: '', borongFrom: U.shiftDays(-30), borongTo: U.today(), borongEmployee: '', borongAdmin: '', borongType: '', monitorDate: U.today(),
     slipBorongEmployee: '', slipBorongWeek: '', slipBorongExtra: 0,
     boxQ: ''
@@ -933,35 +933,106 @@ Object.assign(window.Views, (function () {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function wageForm(existing, close) {
-    const names = U.unique(DB.all('wages').map(w => w.employee));
+  function payrollEmployeeForm(existing) {
+    UI.formModal({
+      title: existing ? 'Ubah Karyawan' : 'Tambah Karyawan',
+      values: existing || { name: '', position: DB.JOB_TITLES[0], dailyWage: 150000, overtimeRate: 25000 },
+      notice: 'Tarif di daftar ini dipakai otomatis saat mencatat gaji. Cukup ubah tarif di sini bila ada penyesuaian.',
+      fields: [
+        { key: 'name', label: 'Nama Karyawan', required: true, placeholder: 'mis. Rizky Prasetyo' },
+        { key: 'position', label: 'Jabatan', type: 'select', options: DB.JOB_TITLES, required: true, placeholder: '-- Pilih jabatan --' },
+        { key: 'dailyWage', label: 'Gaji Harian (Rp)', type: 'number', min: 0, step: 1000, required: true },
+        { key: 'overtimeRate', label: 'Upah Lembur per Jam (Rp)', type: 'number', min: 0, step: 1000, required: true }
+      ],
+      onSubmit(d, closeFn) {
+        const name = String(d.name || '').trim();
+        if (!name) { UI.toast('Nama karyawan wajib diisi', 'warning'); return; }
+        if (DB.getPayrollEmployees().some(e => e.name.toLowerCase() === name.toLowerCase() && e.id !== (existing || {}).id)) {
+          UI.toast('Nama karyawan sudah ada', 'error'); return;
+        }
+        const payload = { name, position: d.position, dailyWage: U.num(d.dailyWage), overtimeRate: U.num(d.overtimeRate) };
+        const res = existing ? DB.updatePayrollEmployee(existing.id, payload) : DB.addPayrollEmployee(payload);
+        if (!res) { UI.toast('Gagal menyimpan karyawan', 'error'); return; }
+        UI.toast(existing ? 'Tarif karyawan diperbarui' : 'Karyawan ditambahkan', 'success');
+        closeFn(); App.refresh();
+      }
+    });
+  }
+
+  function wageForm(existing) {
+    const employees = DB.getPayrollEmployees();
+    const wages = DB.all('wages');
+    const legacy = U.unique(wages.map(w => w.employee))
+      .filter(n => !employees.some(e => e.name === n))
+      .map(n => {
+        const w = wages.find(x => x.employee === n) || {};
+        return { name: n, position: w.position || '', dailyWage: U.num(w.dailyWage), overtimeRate: U.num(w.overtimeRate) };
+      });
+    const allEmps = employees.concat(legacy);
+    const findEmp = name => allEmps.find(e => e.name === name) || {};
+    const preferred = existing ? existing.employee : ((employees[0] || {}).name || '');
+    const emp = findEmp(preferred);
+    const base = existing || { date: U.today(), days: 1, overtimeHours: 0, notes: '' };
+    const values = Object.assign({}, base, {
+      employee: preferred,
+      position: emp.position || base.position || '',
+      dailyWage: emp.dailyWage !== undefined ? U.num(emp.dailyWage) : U.num(base.dailyWage),
+      overtimeRate: emp.overtimeRate !== undefined ? U.num(emp.overtimeRate) : U.num(base.overtimeRate)
+    });
     UI.formModal({
       title: existing ? 'Edit Gaji Harian' : 'Catat Gaji Harian', wide: true,
-      values: existing || {
-        date: U.today(), employee: '', position: DB.JOB_TITLES[0], dailyWage: 150000, overtimeRate: 25000,
-        days: 1, overtimeHours: 0, notes: ''
-      },
-      notice: 'Isi Nama Karyawan dan Jabatan sesuai peran di perusahaan: Manager, Mandor, Angkat Junjung, ' +
-        'Pemborong Amplas, atau Pemborong Packing. Nama baru bisa langsung diketik. ' +
-        'Total harian = (Jumlah masuk x Gaji harian) + (Jam lembur x Upah lembur per jam).',
+      values,
+      notice: 'Pilih karyawan dari Daftar Karyawan. Gaji harian dan upah lembur otomatis mengikuti tarif di daftar; cukup isi jumlah hari masuk dan jam lembur.',
       fields: [
         { key: 'date', label: 'Tanggal', type: 'date', required: true },
-        { key: 'employee', label: 'Nama Karyawan', type: 'datalist', options: names, required: true, placeholder: 'mis. Rizky Prasetyo' },
-        { key: 'position', label: 'Jabatan dalam Perusahaan', type: 'select', options: DB.JOB_TITLES, required: true, placeholder: '-- Pilih jabatan --' },
-        { key: 'dailyWage', label: 'Gaji Harian (Rp)', type: 'number', min: 0, step: 1000, required: true },
-        { key: 'overtimeRate', label: 'Upah Lembur per Jam (Rp)', type: 'number', min: 0, step: 1000, required: true },
+        { key: 'employee', label: 'Nama Karyawan', type: 'select', options: allEmps.map(e => e.name), required: true, placeholder: '-- Pilih karyawan --' },
+        { key: 'position', label: 'Jabatan', type: 'readonly' },
+        { key: 'dailyWage', label: 'Gaji Harian (Rp)', type: 'readonly' },
+        { key: 'overtimeRate', label: 'Upah Lembur per Jam (Rp)', type: 'readonly' },
         { key: 'days', label: 'Jumlah Masuk (hari)', type: 'number', min: 0, step: 0.5, required: true },
         { key: 'overtimeHours', label: 'Jam Lembur', type: 'number', min: 0, step: 0.5 },
         { key: 'notes', label: 'Catatan', type: 'textarea', full: true, placeholder: 'Opsional' }
       ],
+      onOpen() {
+        const sel = U.$('#f_employee');
+        if (!sel) return;
+        sel.addEventListener('change', () => {
+          const e = findEmp(sel.value) || {};
+          const pos = U.$('#f_position'), dw = U.$('#f_dailyWage'), ot = U.$('#f_overtimeRate');
+          if (pos) pos.value = e.position || '';
+          if (dw) dw.value = U.num(e.dailyWage);
+          if (ot) ot.value = U.num(e.overtimeRate);
+        });
+      },
       onSubmit(d, closeFn) {
-        d.dailyWage = U.num(d.dailyWage);
-        d.overtimeRate = U.num(d.overtimeRate);
+        const e = findEmp(d.employee) || {};
+        d.position = e.position || '';
+        d.dailyWage = U.num(e.dailyWage);
+        d.overtimeRate = U.num(e.overtimeRate);
         d.days = U.num(d.days);
         d.overtimeHours = U.num(d.overtimeHours);
-        if (existing) { DB.update('wages', existing.id, d); UI.toast('Data gaji diperbarui', 'success'); }
-        else { DB.insert('wages', d); UI.toast('Gaji harian dicatat', 'success'); }
-        closeFn(); App.refresh();
+        const btn = U.$('#modalForm button[type="submit"]');
+        const label = btn ? btn.textContent : 'Simpan';
+        const busy = on => { if (btn && btn.isConnected) { btn.disabled = on; btn.textContent = on ? 'Menyimpan...' : label; } };
+        const fail = (action, res) => {
+          const msg = res && res.error && res.error.message ? res.error.message : 'tidak diketahui';
+          UI.toast(action + ' gagal: ' + msg, 'error'); busy(false);
+        };
+        busy(true);
+        (async () => {
+          try {
+            if (existing) {
+              const res = await DB.updateAsync('wages', existing.id, d);
+              if (!res.ok) return fail('Edit gaji', res);
+              UI.toast('Data gaji diperbarui', 'success');
+            } else {
+              const res = await DB.insertAsync('wages', d);
+              if (!res.ok) return fail('Catat gaji', res);
+              UI.toast('Gaji harian dicatat', 'success');
+            }
+            closeFn(); App.refresh();
+          } catch (err) { fail(existing ? 'Edit gaji' : 'Catat gaji', { error: err }); }
+        })();
       }
     });
   }
@@ -1058,8 +1129,10 @@ Object.assign(window.Views, (function () {
     render() {
       const allW = DB.all('wages');
       const today = DB.payrollSummary(U.today());
+      const employees = DB.getPayrollEmployees();
       const names = U.unique(allW.map(w => w.employee));
-      if (!state.slipEmployee && names.length) state.slipEmployee = names[0];
+      const empNames = U.unique(employees.map(e => e.name).concat(names)).filter(Boolean).sort(U.natCompare);
+      if (!state.slipEmployee && empNames.length) state.slipEmployee = empNames[0];
       if (!state.slipWeek) state.slipWeek = weekStart(U.today());
 
       let rows = allW.filter(w => (!state.payrollFrom || w.date >= state.payrollFrom) && (!state.payrollTo || w.date <= state.payrollTo));
@@ -1069,17 +1142,15 @@ Object.assign(window.Views, (function () {
       rows.sort((a, b) => b.date.localeCompare(a.date));
 
       const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
-      const bonus = U.num(state.slipBonus), debt = U.num(state.slipDebt), late = U.num(state.slipLate);
+      const adj = DB.getPayrollAdjustment(state.slipEmployee, state.slipWeek);
+      const bonus = U.num(adj.bonus), debt = U.num(adj.debt), late = U.num(adj.late);
       const net = week.subtotal + bonus - debt - late;
-      const weekOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
-      const empOpts = names.map(n => '<option value="' + U.esc(n) + '"' + (n === state.payrollEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const weekOpts = empNames.map(n => '<option value="' + U.esc(n) + '"' + (n === state.slipEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
+      const empOpts = empNames.map(n => '<option value="' + U.esc(n) + '"' + (n === state.payrollEmployee ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('');
       const posOpts = DB.JOB_TITLES.map(p => '<option' + (state.payrollPosition === p ? ' selected' : '') + '>' + U.esc(p) + '</option>').join('');
-      const employeeCards = names.map(n => {
-        const list = allW.filter(w => w.employee === n).sort((a, b) => b.date.localeCompare(a.date));
-        return { name: n, position: (list[0] || {}).position || '-', count: list.length };
-      });
 
-      return UI.pageHead('Gaji Karyawan Harian', 'Nama karyawan & jabatan (Manager, Mandor, Angkat Junjung, Pemborong Amplas, Pemborong Packing), upah harian, lembur, dan slip mingguan',
+      return UI.pageHead('Gaji Karyawan Harian', 'Daftar karyawan dengan tarif tetap; catat gaji cukup isi hari masuk dan jam lembur; bonus dan bon diatur per orang',
+          (can('payroll.edit') ? '<button class="btn" data-act="addEmployee">+ Tambah Karyawan</button>' : '') +
           (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
           '<button class="btn" data-act="printSlip">Cetak Slip Mingguan</button>') +
         '<div class="grid grid-stats">' +
@@ -1088,12 +1159,18 @@ Object.assign(window.Views, (function () {
         UI.statCard({ label: 'Gaji Pokok Hari Ini', value: U.rp(today.basic), sub: 'jumlah masuk x harian', icon: 'Tanggal' }) +
         UI.statCard({ label: 'Upah Lembur Hari Ini', value: U.rp(today.overtime), sub: 'jam x tarif lembur', icon: 'Lembur' }) +
         '</div><br>' +
-        '<div class="card"><div class="card-head"><h3>Daftar Nama Karyawan</h3><span class="badge badge-blue">' + U.fmt(names.length) + ' orang</span></div><div class="card-body">' +
-        (employeeCards.length ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + employeeCards.map(e =>
-          '<button type="button" class="btn btn-sm ' + (state.payrollEmployee === e.name ? 'btn-primary' : '') + '" data-act="filterEmployee" data-name="' + U.esc(e.name) + '">' +
-          U.esc(e.name) + ' <small style="opacity:.75"> |  ' + U.esc(e.position) + '  |  ' + U.fmt(e.count) + ' catatan</small></button>').join('') + '</div>' :
-          '<div class="empty">Belum ada nama karyawan. Klik "+ Catat Gaji Harian" untuk menambah.</div>') +
-        '</div></div><br>' +
+        '<div class="card"><div class="card-head"><h3>Daftar Karyawan & Tarif Gaji</h3><span class="badge badge-blue">' + U.fmt(employees.length) + ' orang</span></div><div class="card-body">' +
+        UI.table({
+          columns: [
+            { label: 'Nama Karyawan', key: 'name' },
+            { label: 'Jabatan', render: r => U.badge(r.position || '-') },
+            { label: 'Gaji Harian', align: 'right', render: r => U.rp(r.dailyWage) },
+            { label: 'Upah Lembur / Jam', align: 'right', render: r => U.rp(r.overtimeRate) }
+          ],
+          rows: employees,
+          actions: can('payroll.edit') ? [{ label: 'Ubah Tarif', act: 'editEmployee' }, { label: 'Hapus', act: 'delEmployee', cls: 'danger' }] : [],
+          empty: 'Belum ada karyawan. Klik "+ Tambah Karyawan".'
+        }) + '</div></div><br>' +
         '<div class="card"><div class="card-head"><h3>Catatan Gaji Harian</h3><span style="display:flex;gap:8px">' +
         '<button class="btn btn-sm" data-act="wageExcel">Excel</button>' +
         '<button class="btn btn-sm" data-act="wagePdf">PDF</button></span></div><div class="card-body">' +
@@ -1129,8 +1206,8 @@ Object.assign(window.Views, (function () {
         '<div class="field"><label>Total Bon / Hutang (Rp)</label><input type="number" id="slipDebt" min="0" step="1000" value="' + debt + '"></div>' +
         '<div class="field"><label>Potongan Telat Masuk (Rp)</label><input type="number" id="slipLate" min="0" step="1000" value="' + late + '"></div>' +
         '</div>' +
-        '<div class="notice" style="margin-top:12px">Jabatan: <strong>' + U.esc(week.position || '-') + '</strong>. ' +
-        'Pilihan jabatan: Manager, Mandor, Angkat Junjung, Pemborong Amplas, Pemborong Packing.</div>' +
+        '<div class="notice" style="margin-top:12px">Jabatan: <strong>' + U.esc(week.position || ((employees.find(e => e.name === state.slipEmployee) || {}).position) || '-') + '</strong>. ' +
+        'Bonus, total bon/hutang, dan potongan telat tersimpan berbeda untuk setiap karyawan pada pekan ini.</div>' +
         '<div style="margin-top:14px">' + UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
@@ -1163,7 +1240,7 @@ Object.assign(window.Views, (function () {
       const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
       const recalc = () => {
         const b = U.num(U.$('#slipBonus', root)?.value), d = U.num(U.$('#slipDebt', root)?.value), l = U.num(U.$('#slipLate', root)?.value);
-        state.slipBonus = b; state.slipDebt = d; state.slipLate = l;
+        DB.savePayrollAdjustment(state.slipEmployee, state.slipWeek, { bonus: b, debt: d, late: l });
         const el = U.$('#slipTotals', root);
         if (el) el.innerHTML = payroll.totalsHtml(week, b, d, l);
       };
@@ -1174,9 +1251,16 @@ Object.assign(window.Views, (function () {
 
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
-        if (act === 'filterEmployee') {
-          state.payrollEmployee = state.payrollEmployee === b.dataset.name ? '' : b.dataset.name;
-          App.refresh();
+        if (act === 'addEmployee') { if (can('payroll.edit')) payrollEmployeeForm(null); }
+        if (act === 'editEmployee') {
+          const e = DB.getPayrollEmployees().find(x => x.id === b.dataset.id);
+          if (e && can('payroll.edit')) payrollEmployeeForm(e);
+        }
+        if (act === 'delEmployee') {
+          const e = DB.getPayrollEmployees().find(x => x.id === b.dataset.id);
+          if (e && can('payroll.edit')) UI.confirm('Hapus ' + e.name + ' dari Daftar Karyawan? Catatan gaji lama tetap tersimpan.', () => {
+            DB.deletePayrollEmployee(e.id); UI.toast('Karyawan dihapus dari daftar', 'success'); App.refresh();
+          }, true);
         }
         if (act === 'printWage') {
           const w = DB.get('wages', b.dataset.id);
@@ -1189,7 +1273,10 @@ Object.assign(window.Views, (function () {
           if (w && can('payroll.edit')) UI.confirm('Hapus catatan gaji ' + w.employee + ' tanggal ' + U.dateID(w.date) + '?', () => { DB.remove('wages', w.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
         }
         if (act === 'printSlip') {
-          printSlip(week, U.num(state.slipBonus), U.num(state.slipDebt), U.num(state.slipLate));
+          printSlip(week,
+            U.num(U.$('#slipBonus', root)?.value),
+            U.num(U.$('#slipDebt', root)?.value),
+            U.num(U.$('#slipLate', root)?.value));
         }
         if (act === 'wageExcel' || act === 'wagePdf') {
           const rows = [['Tanggal', 'Nama Karyawan', 'Jabatan', 'Gaji Harian', 'Lembur/Jam', 'Jumlah Masuk', 'Jam Lembur', 'Gaji Pokok', 'Upah Lembur', 'Total', 'Catatan']]
