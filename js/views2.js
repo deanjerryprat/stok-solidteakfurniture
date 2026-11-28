@@ -1548,6 +1548,232 @@ Object.assign(window.Views, (function () {
     }
   };
 
+  /* ================= RIWAYAT GAJI HARIAN + BORONG ================= */
+  const histState = { q: '', from: '', to: '', kind: '', employee: '' };
+  const HIST_KINDS = [['harian', 'Gaji Harian'], ['amplas', 'Borong Amplas'], ['packing', 'Borong Packing']];
+  const histKindLabel = kind => (HIST_KINDS.find(k => k[0] === kind) || ['', kind])[1];
+  const histLine = (label, value, bold) =>
+    '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)' +
+    (bold ? ';font-weight:700;font-size:16px;border-bottom:none' : '') + '"><span>' + label + '</span><span>' + value + '</span></div>';
+
+  function historyRows() {
+    const rows = [];
+    if (can('payroll.view')) {
+      DB.all('wages').forEach(w => rows.push({
+        id: 'wage:' + w.id, rawId: w.id, source: 'wage', date: w.date || '',
+        kind: 'harian', kindLabel: 'Gaji Harian', employee: w.employee || '',
+        role: w.position || '', admin: '', summary: '',
+        basic: U.num(w.days) * U.num(w.dailyWage),
+        overtime: U.num(w.overtimeHours) * U.num(w.overtimeRate),
+        total: DB.wageTotal(w), notes: w.notes || '', createdAt: w.createdAt || ''
+      }));
+    }
+    if (can('borong.view')) {
+      DB.all('borong').forEach(b => {
+        const kind = b.type === 'Packing' ? 'packing' : 'amplas';
+        rows.push({
+          id: 'borong:' + b.id, rawId: b.id, source: 'borong', date: b.date || '',
+          kind: kind, kindLabel: histKindLabel(kind), employee: b.employee || '',
+          role: b.workerName || '', admin: b.handledByName || adminName(b.handledById),
+          summary: (b.items || []).map(it => (it.sku || '') + ' ' + (it.name || '') + ' x ' + U.fmt(it.qty)).join(' | '),
+          basic: U.sum(b.items || [], it => U.num(it.qty) * U.num(it.rate)),
+          overtime: U.sum(b.items || [], it => U.num(it.overtime)) + U.num(b.overtimeExtra),
+          total: DB.borongTotal(b), notes: b.notes || '', createdAt: b.createdAt || ''
+        });
+      });
+    }
+    return rows;
+  }
+
+  function historyFiltered() {
+    let rows = historyRows();
+    rows = filterRows(rows, histState.q, ['employee', 'role', 'admin', 'summary', 'notes', 'date', 'kindLabel', 'id']);
+    if (histState.from) rows = rows.filter(r => !r.date || r.date >= histState.from);
+    if (histState.to) rows = rows.filter(r => !r.date || r.date <= histState.to);
+    if (histState.kind) rows = rows.filter(r => r.kind === histState.kind);
+    if (histState.employee) rows = rows.filter(r => r.employee === histState.employee);
+    rows.sort((a, b) => b.date.localeCompare(a.date) ||
+      String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || a.kindLabel.localeCompare(b.kindLabel));
+    return rows;
+  }
+
+  function historyExportRows(rows) {
+    return [['Tanggal', 'Jenis', 'Nama', 'Peran / Karyawan', 'Admin', 'Rincian', 'Upah Pokok / Borong', 'Lembur', 'Total', 'Catatan', 'Dicatat']]
+      .concat(rows.map(r => [
+        U.dateID(r.date), r.kindLabel, r.employee, r.role, r.admin, r.summary,
+        r.basic, r.overtime, r.total, r.notes, U.dateTime(r.createdAt)
+      ]));
+  }
+
+  function historyDetailHtml(r) {
+    if (r.source === 'wage') {
+      const w = DB.get('wages', r.rawId);
+      if (!w) return '';
+      return UI.modalHead('Detail Gaji Harian') +
+        '<div class="modal-body">' +
+        '<div class="notice">Dicatat: ' + U.esc(U.dateTime(w.createdAt)) + '. Sumber: menu Gaji Karyawan.</div><br>' +
+        '<div style="max-width:520px">' +
+        histLine('Tanggal', U.dateID(w.date)) +
+        histLine('Nama Karyawan', U.esc(w.employee || '-')) +
+        histLine('Jabatan', U.esc(w.position || '-')) +
+        histLine('Gaji Harian', U.rp(w.dailyWage)) +
+        histLine('Jumlah Masuk', U.num(w.days) + ' hari') +
+        histLine('Tarif Lembur per Jam', U.rp(w.overtimeRate)) +
+        histLine('Jam Lembur', U.num(w.overtimeHours) + ' jam') +
+        histLine('Gaji Pokok', U.rp(U.num(w.days) * U.num(w.dailyWage))) +
+        histLine('Upah Lembur', U.rp(U.num(w.overtimeHours) * U.num(w.overtimeRate))) +
+        histLine('Catatan', U.esc(w.notes || '-')) +
+        histLine('TOTAL', U.rp(DB.wageTotal(w)), true) +
+        '</div></div><div class="modal-foot"><button type="button" class="btn" data-close>Tutup</button>' +
+        '<button type="button" class="btn btn-primary" data-act="histPrint">Cetak Bukti</button></div>';
+    }
+    const b = DB.get('borong', r.rawId);
+    if (!b) return '';
+    const items = b.items || [];
+    return UI.modalHead('Detail Gaji Borong') +
+      '<div class="modal-body">' +
+      '<div class="notice">Dicatat: ' + U.esc(U.dateTime(b.createdAt)) + '. Sumber: menu Tugas & Gaji Borong.</div><br>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:12px">' +
+      '<div><div style="color:var(--muted);font-size:11px">Nama Pemborong</div><strong>' + U.esc(b.employee || '-') + '</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Jenis</div><strong>' + U.esc(b.type || '-') + '</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Admin</div><strong>' + U.esc(b.handledByName || adminName(b.handledById)) + '</strong></div>' +
+      '<div><div style="color:var(--muted);font-size:11px">Karyawan yang Dipegang</div><strong>' + U.esc(b.workerName || '-') + '</strong></div>' +
+      '</div>' +
+      UI.table({
+        columns: [
+          { label: 'SKU', key: 'sku' },
+          { label: 'Produk', key: 'name' },
+          { label: 'Target', align: 'right', render: it => U.fmt(DB.borongItemTarget(it)) },
+          { label: 'Selesai', align: 'right', render: it => U.fmt(it.qty) },
+          { label: 'Tarif', align: 'right', render: it => U.rp(it.rate) },
+          { label: 'Lembur', align: 'right', render: it => U.rp(it.overtime) },
+          { label: 'Jumlah', align: 'right', render: it => '<strong>' + U.rp(DB.borongItemTotal(it)) + '</strong>' }
+        ], rows: items, empty: 'Tidak ada item pada catatan ini.'
+      }) +
+      '<div style="max-width:380px;margin:14px 0 0 auto">' +
+      histLine('Upah Borong', U.rp(U.sum(items, it => U.num(it.qty) * U.num(it.rate)))) +
+      histLine('Lembur per Item', U.rp(U.sum(items, it => U.num(it.overtime)))) +
+      histLine('Tambahan Lembur', U.rp(b.overtimeExtra)) +
+      histLine('TOTAL', U.rp(DB.borongTotal(b)), true) +
+      '</div><p><strong>Catatan:</strong> ' + U.esc(b.notes || '-') + '</p>' +
+      '</div><div class="modal-foot"><button type="button" class="btn" data-close>Tutup</button>' +
+      '<button type="button" class="btn btn-primary" data-act="histPrint">Cetak Bukti</button></div>';
+  }
+
+  function historyBorongHtml(b) {
+    const itemRows = (b.items || []).map(it =>
+      '<tr><td>' + U.esc(it.sku || '-') + '</td><td>' + U.esc(it.name || '-') + '</td>' +
+      '<td class="num">' + U.fmt(DB.borongItemTarget(it)) + '</td><td class="num">' + U.fmt(it.qty) + '</td>' +
+      '<td class="num">' + U.rp(it.rate) + '</td><td class="num">' + U.rp(it.overtime) + '</td>' +
+      '<td class="num">' + U.rp(DB.borongItemTotal(it)) + '</td></tr>').join('') ||
+      '<tr><td colspan="7" style="text-align:center">Tidak ada item</td></tr>';
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Bukti Gaji Borong</title>' +
+      '<style>body{font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#1e293b}' +
+      'h1{font-size:20px;margin:0 0 4px}.muted{color:#64748b;font-size:12px}' +
+      '.head{display:flex;justify-content:space-between;border-bottom:2px solid #7a4a22;padding-bottom:12px;margin-bottom:16px}' +
+      'table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}' +
+      'th{background:#efe0cc}.num{text-align:right}.total{text-align:right;font-size:16px;font-weight:bold;margin-top:16px}' +
+      '@media print{body{padding:10px}}</style></head><body>' +
+      '<div class="head"><div><h1>BUKTI GAJI BORONG</h1><div class="muted">Amplas & Packing - CV Furniture Jati</div></div>' +
+      '<div style="text-align:right"><strong>' + U.esc(b.employee || '-') + '</strong><br><span class="muted">' + U.dateID(b.date) + '</span></div></div>' +
+      '<table><thead><tr><th>SKU</th><th>Produk</th><th class="num">Target</th><th class="num">Selesai</th><th class="num">Tarif</th><th class="num">Lembur</th><th class="num">Jumlah</th></tr></thead><tbody>' +
+      itemRows + '</tbody></table>' +
+      '<p><strong>Admin:</strong> ' + U.esc(b.handledByName || adminName(b.handledById)) +
+      ' | <strong>Karyawan:</strong> ' + U.esc(b.workerName || '-') +
+      ' | <strong>Catatan:</strong> ' + U.esc(b.notes || '-') + '</p>' +
+      '<div class="total">TOTAL: ' + U.rp(DB.borongTotal(b)) + '</div>' +
+      '<p class="muted" style="margin-top:24px">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</p>' +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
+  }
+
+  function printHistoryRow(r) {
+    if (r.source === 'wage') {
+      const w = DB.get('wages', r.rawId);
+      if (w) printDocument(wageDailyHtml(w), 'Bukti gaji disiapkan untuk dicetak');
+    } else {
+      const b = DB.get('borong', r.rawId);
+      if (b) printDocument(historyBorongHtml(b), 'Bukti gaji borong disiapkan untuk dicetak');
+    }
+  }
+
+  const wageHistory = {
+    render() {
+      const allRows = historyRows();
+      const rows = historyFiltered();
+      const employees = U.unique(allRows.map(r => r.employee).filter(Boolean)).sort(U.natCompare);
+      const dailyTotal = U.sum(rows.filter(r => r.source === 'wage'), r => r.total);
+      const borongTotal = U.sum(rows.filter(r => r.source === 'borong'), r => r.total);
+      return UI.pageHead('Riwayat Gaji',
+        'Semua catatan gaji harian dan borong yang sudah disimpan; data diambil langsung dari database',
+        '<button class="btn" data-act="histExcel">Excel</button><button class="btn" data-act="histPdf">PDF</button>') +
+        '<div class="grid grid-stats">' +
+        UI.statCard({ label: 'Total Catatan', value: U.fmt(rows.length), sub: 'sesuai filter', icon: 'Laporan' }) +
+        UI.statCard({ label: 'Gaji Harian', value: U.rp(dailyTotal), sub: 'total sesuai filter', icon: 'Gaji' }) +
+        UI.statCard({ label: 'Gaji Borong', value: U.rp(borongTotal), sub: 'total sesuai filter', icon: 'Borong' }) +
+        UI.statCard({ label: 'Total Seluruhnya', value: U.rp(dailyTotal + borongTotal), sub: 'harian + borong', icon: 'Laporan' }) +
+        '</div><br>' +
+        '<div class="card"><div class="card-head"><h3>Daftar Riwayat Gaji</h3><span class="badge badge-blue">' + U.fmt(rows.length) + ' catatan</span></div><div class="card-body">' +
+        '<div class="toolbar">' +
+        '<input id="histQ" placeholder="Cari nama / produk / admin / catatan..." value="' + U.esc(histState.q) + '">' +
+        '<input type="date" id="histFrom" value="' + U.esc(histState.from) + '" title="Dari tanggal">' +
+        '<input type="date" id="histTo" value="' + U.esc(histState.to) + '" title="Sampai tanggal">' +
+        '<select id="histKind"><option value="">Semua jenis</option>' + HIST_KINDS.map(k =>
+          '<option value="' + k[0] + '"' + (histState.kind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>').join('') + '</select>' +
+        '<select id="histEmployee"><option value="">Semua nama</option>' + employees.map(n =>
+          '<option value="' + U.esc(n) + '"' + (histState.employee === n ? ' selected' : '') + '>' + U.esc(n) + '</option>').join('') + '</select>' +
+        '<div class="spacer"></div><strong>' + U.rp(dailyTotal + borongTotal) + '</strong></div>' +
+        UI.table({
+          columns: [
+            { label: 'Tanggal', render: r => U.dateID(r.date) },
+            { label: 'Jenis', render: r => U.badge(r.kindLabel) },
+            { label: 'Nama', render: r => U.esc(r.employee || '-') },
+            { label: 'Peran / Karyawan', render: r => U.esc(r.role || '-') },
+            { label: 'Admin', render: r => U.esc(r.admin || '-') },
+            { label: 'Rincian', render: r => U.esc(r.summary || r.role || '-') },
+            { label: 'Upah Pokok / Borong', align: 'right', render: r => U.rp(r.basic) },
+            { label: 'Lembur', align: 'right', render: r => U.rp(r.overtime) },
+            { label: 'Total', align: 'right', render: r => '<strong>' + U.rp(r.total) + '</strong>' },
+            { label: 'Catatan', render: r => U.esc(r.notes || '-') },
+            { label: 'Dicatat', render: r => U.esc(U.dateTime(r.createdAt)) }
+          ], rows,
+          actions: [{ label: 'Lihat', act: 'histView' }, { label: 'Cetak', act: 'histPrint' }],
+          empty: 'Belum ada catatan gaji. Buat gaji di menu Gaji Karyawan atau Tugas & Gaji Borong.'
+        }) + '</div></div>';
+    },
+    bind(root) {
+      const refreshSearch = () => {
+        App.refresh();
+        const el = U.$('#histQ');
+        if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      };
+      U.$('#histQ', root).addEventListener('input', e => { histState.q = e.target.value; refreshSearch(); });
+      ['#histFrom:from', '#histTo:to', '#histKind:kind', '#histEmployee:employee'].forEach(pair => {
+        const parts = pair.split(':');
+        const el = U.$(parts[0], root);
+        if (el) el.addEventListener('change', e => { histState[parts[1]] = e.target.value; App.refresh(); });
+      });
+      U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
+        const act = b.dataset.act;
+        const rows = historyFiltered();
+        if (act === 'histExcel' || act === 'histPdf') {
+          const data = historyExportRows(rows);
+          if (act === 'histExcel') U.exportExcel('riwayat-gaji', data); else U.exportPDF('Riwayat Gaji', data);
+          return;
+        }
+        const r = rows.find(x => x.id === b.dataset.id);
+        if (!r) return;
+        if (act === 'histPrint') { printHistoryRow(r); return; }
+        if (act === 'histView') {
+          const html = historyDetailHtml(r);
+          if (!html) { UI.toast('Catatan sudah tidak ada', 'warning'); return; }
+          UI.openModal(html, { wide: true });
+          U.$$('[data-act="histPrint"]', U.$('#modalRoot')).forEach(btn =>
+            btn.addEventListener('click', () => printHistoryRow(r)));
+        }
+      }));
+    }
+  };
+
   /* ================= IMPORT EXCEL / CSV ================= */
   const impState = {
     fileName: '', sheet: '', headerRow: 1, sheets: [], headers: [], rows: [],
@@ -2006,5 +2232,5 @@ Object.assign(window.Views, (function () {
   };
 
   notifications.alerts = alerts;
-  return { distributions, boxes, returns, spk, reports, search, notifications, users, settings, payroll, borong, import: importView };
+  return { distributions, boxes, returns, spk, reports, search, notifications, users, settings, payroll, borong, wageHistory, import: importView };
 })());
