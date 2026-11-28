@@ -741,25 +741,30 @@ window.DB = (function () {
     if (to !== from && get('artisans', to)) return false;
     const row = get('artisans', from);
     if (!row) return false;
+    const oldName = String(row.name || '');
     const patch = {};
     if (to !== from) patch.id = to;
-    if (nm !== row.name) patch.name = nm;
+    if (nm !== oldName) patch.name = nm;
     if (!Object.keys(patch).length) return true;
     Object.assign(row, patch);
     save();
     if (isSupabase()) queue(() => sb.from('artisans').update(patch).eq('id', from), 'update artisans');
     if (to !== from) {
-      ['distributions', 'returns', 'spk'].forEach(name => {
+      ['distributions', 'returns', 'spk', 'inbound'].forEach(name => {
         const ids = all(name).filter(x => x.artisanId === from).map(x => x.id);
         if (ids.length) updateMany(name, ids, { artisanId: to });
       });
     }
-    if (nm !== row.name || patch.name) {
-      const currentName = nm;
+    if (nm !== oldName) {
+      const lowerOld = oldName.trim().toLowerCase();
       ['distributions', 'returns'].forEach(name => {
         const ids = all(name).filter(x => x.artisanId === to).map(x => x.id);
-        if (ids.length) updateMany(name, ids, { artisanName: currentName });
+        if (ids.length) updateMany(name, ids, { artisanName: nm });
       });
+      const inboundIds = all('inbound').filter(x =>
+        x.artisanId === to || (!x.artisanId && String(x.supplier || '').trim().toLowerCase() === lowerOld)
+      ).map(x => x.id);
+      if (inboundIds.length) updateMany('inbound', inboundIds, { artisanId: to, supplier: nm });
     }
     return true;
   }

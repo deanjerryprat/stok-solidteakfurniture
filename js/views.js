@@ -4,10 +4,26 @@ window.Views = (function () {
   const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pName = id => (DB.get('products', id) || {}).name || '-';
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
+  const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  function artisanByName(name) {
+    const n = String(name || '').trim().toLowerCase();
+    return n ? DB.all('artisans').find(a => sameName(a.name, n)) || null : null;
+  }
+  // Barang masuk lama belum punya artisanId; kenali dari nama supplier bila cocok.
+  function inboundArtisan(x) {
+    if (!x) return null;
+    return x.artisanId ? (DB.get('artisans', x.artisanId) || null) : artisanByName(x.supplier);
+  }
+  function inboundForArtisan(id) {
+    const a = DB.get('artisans', id);
+    if (!a) return [];
+    return DB.all('inbound').filter(x => x.artisanId === id || (!x.artisanId && sameName(x.supplier, a.name)))
+      .sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
+  }
   const pOf = id => DB.get('products', id) || {};
   const can = p => DB.can(p);
 
-  const state = { productSearch: '', productCat: '', productStatus: '', inSearch: '', inDate: '', inSelected: [], outSearch: '', outType: '', outDate: '', outSelected: [], artisanSearch: '', artisanActive: '' };
+  const state = { productSearch: '', productCat: '', productStatus: '', inSearch: '', inDate: '', inArtisan: '', inSelected: [], outSearch: '', outType: '', outDate: '', outSelected: [], artisanSearch: '', artisanActive: '' };
   const OUT_TYPES = ['Customer', 'Borong Obat', 'Servis', 'Pinjaman Sampel', 'Rusak/Afkir'];
   const RETURNABLE = ['Borong Obat', 'Servis', 'Pinjaman Sampel'];
 
@@ -411,21 +427,40 @@ window.Views = (function () {
 
   /* ================= BARANG MASUK ================= */
   function inboundForm(existing) {
+    const linked = existing ? inboundArtisan(existing) : null;
+    const values = existing
+      ? Object.assign({}, existing, { artisanId: linked ? linked.id : '' })
+      : { date: U.today(), artisanId: '' };
     UI.formModal({
       title: existing ? 'Edit Barang Masuk' : 'Catat Barang Masuk', wide: true,
-      values: existing || { date: U.today() },
+      values,
+      notice: 'Pilih pengrajin dari Daftar Pengrajin bila barang berasal dari pengrajin. Nama pengrajin akan otomatis diisi ke kolom sumber. Supplier di luar daftar tetap bisa diketik manual.',
       fields: [
         { key: 'date', label: 'Tanggal Masuk', type: 'date', required: true },
-        { key: 'supplier', label: 'Supplier / Pengrajin', required: true, placeholder: 'CV Jati Utama' },
+        { key: 'artisanId', label: 'Pengrajin (Daftar Pengrajin)', type: 'select', options: aOpts(), placeholder: '-- Pilih pengrajin --', full: true },
+        { key: 'supplier', label: 'Supplier / Sumber Barang', required: true, placeholder: 'CV Jati Utama' },
         { key: 'productId', label: 'Produk', type: 'select', options: pOpts(), required: true, placeholder: '-- Pilih produk --', full: true },
         { key: 'qty', label: 'Jumlah Masuk (pcs)', type: 'number', min: 1, required: true },
         { key: 'condition', label: 'Kondisi Barang', type: 'select', options: ['Baik', 'Rusak Ringan', 'Rusak'], required: true, value: 'Baik' },
         { key: 'receiver', label: 'Petugas Penerima', required: true, placeholder: 'Budi' },
         { key: 'notes', label: 'Keterangan', type: 'textarea', full: true }
       ],
+      onOpen() {
+        const sel = U.$('#f_artisanId');
+        if (!sel) return;
+        sel.addEventListener('change', () => {
+          const a = DB.get('artisans', sel.value);
+          const input = U.$('#f_supplier');
+          if (a && input) input.value = a.name;
+        });
+      },
       onSubmit(data, close) {
         if (U.num(data.qty) <= 0) { UI.toast('Jumlah harus > 0', 'error'); return; }
         const p = pOf(data.productId);
+        const a = data.artisanId ? DB.get('artisans', data.artisanId) : null;
+        data.artisanId = a ? a.id : '';
+        if (a) data.supplier = a.name;
+        if (!String(data.supplier || '').trim()) { UI.toast('Supplier / sumber barang wajib diisi', 'warning'); return; }
         data.sku = p.sku; data.productName = p.name; data.qty = U.num(data.qty);
         if (existing) DB.update('inbound', existing.id, data); else DB.insert('inbound', data);
         UI.toast('Barang masuk tercatat. Stok gudang bertambah ' + U.fmt(data.qty), 'success');
@@ -439,20 +474,27 @@ window.Views = (function () {
       let rows = DB.all('inbound');
       rows = filterRows(rows, state.inSearch, ['sku', 'productName', 'supplier', 'receiver', 'notes', 'date']);
       if (state.inDate) rows = rows.filter(x => x.date === state.inDate);
+      if (state.inArtisan) rows = rows.filter(x => { const a = inboundArtisan(x); return a && a.id === state.inArtisan; });
       rows.sort((a, b) => b.date.localeCompare(a.date));
       const pick = selectable('inbound', rows);
       return UI.pageHead('Barang Masuk (Inbound)', 'Pencatatan semua barang yang diterima perusahaan',
         (can('inbound.create') ? '<button class="btn btn-primary" data-act="add">+ Catat Barang Masuk</button>' : '') +
         (can('inbound.delete') ? '<button class="btn btn-danger" data-act="deleteSelected" data-bulk="inbound" disabled>Hapus Terpilih (0)</button>' : '') +
         (can('inbound.view') ? '<button class="btn" data-act="excel">Excel</button><button class="btn" data-act="pdf">PDF</button>' : '')) +
-        '<div class="toolbar"><input id="inSearch" placeholder="Cari produk / supplier / petugas..." value="' + U.esc(state.inSearch) + '">' +
-        '<input type="date" id="inDate" value="' + U.esc(state.inDate) + '"><div class="spacer"></div>' +
+        '<div class="toolbar"><input id="inSearch" placeholder="Cari produk / supplier / pengrajin / petugas..." value="' + U.esc(state.inSearch) + '">' +
+        '<input type="date" id="inDate" value="' + U.esc(state.inDate) + '">' +
+        '<select id="inArtisan"><option value="">Semua pengrajin</option>' +
+        aOpts().map(a => '<option value="' + U.esc(a.value) + '"' + (state.inArtisan === a.value ? ' selected' : '') + '>' + U.esc(a.label) + '</option>').join('') +
+        '</select><div class="spacer"></div>' +
         '<strong>Total masuk: ' + U.fmt(U.sum(rows, r => r.qty)) + ' pcs</strong></div>' +
         '<div class="card"><div class="card-body">' + UI.table({
           columns: [
             ...(can('inbound.delete') ? [{ label: 'Tandai', htmlLabel: pick.header, render: pick.cell }] : []),
             { label: 'Tanggal', render: r => U.dateID(r.date) },
-            { label: 'Supplier', key: 'supplier' },
+            { label: 'Supplier / Pengrajin', render: r => {
+              const a = inboundArtisan(r);
+              return a ? '<a href="#/artisans/' + U.esc(a.id) + '" title="Lihat barang yang pernah dikirim ' + U.esc(a.name) + '">' + U.esc(r.supplier || a.name) + '</a>' : U.esc(r.supplier || '-');
+            } },
             { label: 'SKU', key: 'sku' },
             { label: 'Produk', key: 'productName' },
             { label: 'Qty', align: 'right', render: r => '<strong>' + U.fmt(r.qty) + '</strong>' },
@@ -467,6 +509,7 @@ window.Views = (function () {
     bind(root) {
       U.$('#inSearch', root).addEventListener('input', e => { state.inSearch = e.target.value; state.inSelected = []; App.refresh(); U.$('#inSearch').focus(); });
       U.$('#inDate', root).addEventListener('change', e => { state.inDate = e.target.value; state.inSelected = []; App.refresh(); });
+      U.$('#inArtisan', root).addEventListener('change', e => { state.inArtisan = e.target.value; state.inSelected = []; App.refresh(); });
       bindSelect(root, 'inbound');
       U.$$('[data-act]', root).forEach(b => b.addEventListener('click', () => {
         const act = b.dataset.act;
@@ -475,8 +518,8 @@ window.Views = (function () {
         if (act === 'delete') { const x = DB.get('inbound', b.dataset.id); if (x) UI.confirm('Hapus transaksi masuk ' + x.sku + '? Stok akan dikurangi otomatis.', () => { DB.remove('inbound', x.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true); }
         if (act === 'deleteSelected') bulkDelete('inbound', state.inSelected || []);
         if (act === 'excel' || act === 'pdf') {
-          const rows = [['Tanggal', 'Supplier', 'SKU', 'Produk', 'Qty', 'Kondisi', 'Petugas', 'Keterangan']]
-            .concat(DB.all('inbound').sort((a, b) => b.date.localeCompare(a.date)).map(x => [U.dateID(x.date), x.supplier, x.sku, x.productName, x.qty, x.condition, x.receiver, x.notes]));
+          const rows = [['Tanggal', 'Supplier / Sumber', 'Pengrajin Terkait', 'SKU', 'Produk', 'Qty', 'Kondisi', 'Petugas', 'Keterangan']]
+            .concat(DB.all('inbound').sort((a, b) => b.date.localeCompare(a.date)).map(x => [U.dateID(x.date), x.supplier, (inboundArtisan(x) || {}).name || '', x.sku, x.productName, x.qty, x.condition, x.receiver, x.notes]));
           if (act === 'excel') U.exportExcel('laporan-barang-masuk', rows); else U.exportPDF('Laporan Barang Masuk', rows);
         }
       }));
@@ -685,6 +728,16 @@ window.Views = (function () {
       const s = DB.artisanStats(a.id);
       const dists = DB.all('distributions').filter(d => d.artisanId === a.id).sort((x, y) => y.date.localeCompare(x.date));
       const rets = DB.all('returns').filter(r => r.artisanId === a.id).sort((x, y) => y.date.localeCompare(x.date));
+      const inbound = inboundForArtisan(a.id);
+      const grouped = [];
+      inbound.forEach(x => {
+        const key = x.productId || x.sku || x.productName || '-';
+        let g = grouped.find(z => z.key === key);
+        if (!g) { g = { key, sku: x.sku || '-', name: x.productName || '-', qty: 0, count: 0, last: '' }; grouped.push(g); }
+        g.qty += U.num(x.qty); g.count++;
+        if (String(x.date || '') > g.last) g.last = String(x.date || '');
+      });
+      grouped.sort((x, y) => String(y.last).localeCompare(String(x.last)));
       const t = U.today();
       return UI.pageHead(a.name, a.id + '  |  ' + (a.specialization || '-') + '  |  ' + (a.address || '-'),
         '<a class="btn" href="#/artisans">Kembali ke Daftar Pengrajin</a>' +
@@ -694,6 +747,7 @@ window.Views = (function () {
         (can('returns.create') ? '<button class="btn btn-success" data-act="return">Terima Barang Kembali</button>' : '')) +
         '<div class="grid grid-stats">' +
         UI.statCard({ label: 'Barang Diterima', value: U.fmt(s.received), icon: 'Masuk', accent: 'in' }) +
+        UI.statCard({ label: 'Pernah Kirim / Masuk', value: U.fmt(U.sum(inbound, x => U.num(x.qty))) + ' pcs', sub: U.fmt(inbound.length) + ' transaksi', icon: 'Masuk', accent: 'in' }) +
         UI.statCard({ label: 'Sudah Selesai', value: U.fmt(s.finished), icon: 'Selesai' }) +
         UI.statCard({ label: 'Belum Selesai', value: U.fmt(s.unfinished), icon: 'Produksi', accent: 'process' }) +
         UI.statCard({ label: 'Dikembalikan Afkir', value: U.fmt(s.afkir), icon: 'Perhatian', accent: 'bad' }) +
@@ -717,7 +771,15 @@ window.Views = (function () {
           { label: 'Qty Kembali', align: 'right', render: r => U.fmt(r.qty) },
           { label: 'Afkir', align: 'right', render: r => U.fmt(r.afkirQty) },
           { label: 'Catatan', key: 'notes' }
-        ], rows: rets, empty: 'Belum ada barang kembali.' }) + '</div></div>' +
+        ], rows: rets, empty: 'Belum ada barang kembali.' }) + '</div></div><br>' +
+        '<div class="card"><div class="card-head"><h3>Barang Pernah Dikirim / Masuk</h3><span class="badge badge-blue">' + U.fmt(inbound.length) + ' transaksi</span></div><div class="card-body">' +
+        UI.table({ columns: [
+          { label: 'Produk', render: r => U.esc(r.name) + '<br><small>' + U.esc(r.sku) + '</small>' },
+          { label: 'Total Dikirim', align: 'right', render: r => '<strong>' + U.fmt(r.qty) + ' pcs</strong>' },
+          { label: 'Jumlah Transaksi', align: 'right', render: r => U.fmt(r.count) },
+          { label: 'Terakhir', render: r => r.last ? U.dateID(r.last) : '-' }
+        ], rows: grouped, empty: 'Belum ada barang masuk yang tertaut ke pengrajin ini. Catatan lama dengan nama pengrajin yang sama otomatis ikut terhitung.' }) +
+        '</div></div>' +
         '<div class="section-title">Catatan Pengrajin</div><div class="card card-body">' + U.esc(a.notes || '-') +
         '<br><small style="color:var(--muted)">Spesialisasi: ' + U.esc((a.productTypes || []).join(', ')) + '  |  Telepon: ' + U.esc(a.phone || '-') + '</small></div>';
     },
