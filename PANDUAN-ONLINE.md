@@ -7,6 +7,7 @@ Panduan ini untuk menyambungkan **semua pembaruan terbaru** ke mode online:
 - **Gaji Karyawan**: ada **Jabatan** (`Manager`, `Mandor`, `Angkat Junjung`, `Pemborong Amplas`, `Pemborong Packing`) dan daftar nama karyawan di atas catatan gaji harian.
 - Barang kembali dari **Borong Obat / Servis / Pinjaman Sampel** -> QC -> **Buat Masuk**.
 - Panel **Informasi Produksi & Gudang** dan **Pengawasan Harian** di dashboard/borong.
+- Menu **Riwayat Gaji** menggabungkan catatan gaji harian dan borong yang sudah tersimpan; tidak memerlukan tabel atau SQL baru.
 
 > File SQL di bawah **aman dijalankan berulang** dan **tidak menghapus data**. Jalankan satu file per query di Supabase SQL Editor.
 
