@@ -1212,6 +1212,13 @@ Object.assign(window.Views, (function () {
     const assign = mode === 'assign';
     let items = existing ? JSON.parse(JSON.stringify(existing.items || [])) : [];
     let curType = existing ? existing.type : 'Amplas';
+    if (existing) {
+      items.forEach(it => {
+        const dbRate = rateOf(DB.get('products', it.productId) || {}, curType);
+        // Tarif lama yang beda dari Database Produk dianggap nominal manual.
+        if (U.num(it.rate) !== dbRate) it.manualRate = true;
+      });
+    }
     const opts = pOpts();
 
     const itemHTML = (it, i) =>
@@ -1229,13 +1236,13 @@ Object.assign(window.Views, (function () {
       U.$$('.borong-item', U.$('#modalRoot')).forEach(row => {
         const i = Number(row.dataset.i);
         const p = DB.get('products', U.$('.bi-product', row).value) || {};
-        items[i] = {
+        items[i] = Object.assign({}, items[i], {
           productId: p.id || '', sku: p.sku || '', name: p.name || '',
           targetQty: U.num(U.$('.bi-target', row).value),
           qty: U.num(U.$('.bi-qty', row).value),
           rate: U.num(U.$('.bi-rate', row).value),
           overtime: U.num(U.$('.bi-ot', row).value)
-        };
+        });
       });
     };
     const recalc = () => {
@@ -1260,10 +1267,20 @@ Object.assign(window.Views, (function () {
       U.$$('.bi-product', m).forEach(sel => sel.addEventListener('change', () => {
         sync();
         const i = Number(sel.dataset.i), p = DB.get('products', sel.value) || {};
-        items[i] = Object.assign({}, items[i], { productId: p.id || '', sku: p.sku || '', name: p.name || '', rate: rateOf(p, curType) });
+        const keepManual = !!items[i].manualRate;
+        items[i] = Object.assign({}, items[i], {
+          productId: p.id || '', sku: p.sku || '', name: p.name || '',
+          rate: keepManual ? items[i].rate : rateOf(p, curType)
+        });
         drawItems();
       }));
-      U.$$('.bi-target, .bi-qty, .bi-rate, .bi-ot', m).forEach(inp => inp.addEventListener('input', () => { sync(); recalc(); }));
+      U.$$('.bi-target, .bi-qty, .bi-ot', m).forEach(inp => inp.addEventListener('input', () => { sync(); recalc(); }));
+      U.$$('.bi-rate', m).forEach(inp => inp.addEventListener('input', () => {
+        sync();
+        const i = Number(inp.dataset.i);
+        items[i].manualRate = inp.value.trim() !== '';
+        recalc();
+      }));
       U.$$('.bi-del', m).forEach(btn => btn.addEventListener('click', () => { sync(); items.splice(Number(btn.dataset.i), 1); drawItems(); }));
     };
     const drawItems = () => {
@@ -1275,8 +1292,8 @@ Object.assign(window.Views, (function () {
     UI.openModal(UI.modalHead(assign ? 'Tugaskan Borong Harian' : (existing ? 'Edit Gaji Borong' : 'Catat Gaji Borong')) +
       '<form id="borongForm"><div class="modal-body">' +
       '<div class="notice">' + (assign
-        ? 'Pilih <strong>Admin yang Menangani</strong> (mis. admin gudang yang memegang karyawan bernama Ulin), isi karyawan yang dipegang bila perlu, lalu <strong>Nama Pemborong</strong> penerima borong. Kolom <strong>Target</strong> = rencana, <strong>Selesai</strong> = realisasi. Owner memantau progres di tabel ini.'
-        : 'Tarif per pcs otomatis diambil dari <strong>Database Produk</strong>. Kolom <strong>Selesai</strong> dipakai sebagai jumlah upah.') + '</div><br>' +
+        ? 'Pilih <strong>Admin yang Menangani</strong> (mis. admin gudang yang memegang karyawan bernama Ulin), isi karyawan yang dipegang bila perlu, lalu <strong>Nama Pemborong</strong> penerima borong. Kolom <strong>Target</strong> = rencana, <strong>Selesai</strong> = realisasi. Nominal <strong>Rp/pcs</strong> bisa diketik manual; kosongkan untuk memakai tarif Database Produk.'
+        : 'Nominal <strong>Rp/pcs</strong> bisa diketik manual. Kosongkan atau klik <strong>Isi tarif dari Database Produk</strong> untuk memakai tarif yang sudah disimpan per produk. Kolom <strong>Selesai</strong> dipakai sebagai jumlah upah.') + '</div><br>' +
       '<div class="form-grid">' +
       '<div class="field"><label>Tanggal</label><input type="date" id="borongDate" required value="' + U.esc(existing ? existing.date : U.today()) + '"></div>' +
       '<div class="field"><label>Admin yang Menangani</label><select id="borongAdminId" required><option value="">-- Pilih admin --</option>' +
@@ -1290,6 +1307,7 @@ Object.assign(window.Views, (function () {
       '<div class="borong-head"><span>Produk</span><span>Target</span><span>Selesai</span><span>Rp/pcs</span><span>Lembur Rp</span><span>Jumlah</span><span></span></div>' +
       '<div id="borongItems"></div>' +
       '<button type="button" class="btn btn-sm" id="borongAddItem">+ Tambah Item</button>' +
+      '<button type="button" class="btn btn-sm" id="borongFillRate" style="margin-left:6px">Isi tarif dari Database Produk</button>' +
       '<div class="form-grid" style="margin-top:14px"><div class="field"><label>Tambahan Lembur Lainnya (Rp)</label>' +
       '<input type="number" id="borongExtra" min="0" step="1000" value="' + U.esc(existing ? existing.overtimeExtra || 0 : 0) + '"></div></div>' +
       '<div id="borongTotal" style="max-width:360px;margin:14px 0 0 auto"></div>' +
@@ -1299,12 +1317,27 @@ Object.assign(window.Views, (function () {
     const m = U.$('#modalRoot');
     U.$('#borongJobType', m).addEventListener('change', e => {
       curType = e.target.value; sync();
-      items.forEach(it => { const p = DB.get('products', it.productId) || {}; it.rate = rateOf(p, curType); });
+      items.forEach(it => {
+        if (it.manualRate) return;
+        const p = DB.get('products', it.productId) || {};
+        it.rate = rateOf(p, curType);
+      });
       drawItems();
     });
     U.$('#borongExtra', m).addEventListener('input', recalc);
     U.$('#borongAddItem', m).addEventListener('click', () => {
-      sync(); items.push({ productId: '', sku: '', name: '', targetQty: 1, qty: assign ? 0 : 1, rate: 0, overtime: 0 }); drawItems();
+      sync(); items.push({ productId: '', sku: '', name: '', targetQty: 1, qty: assign ? 0 : 1, rate: 0, overtime: 0, manualRate: false }); drawItems();
+    });
+    U.$('#borongFillRate', m).addEventListener('click', () => {
+      sync();
+      let filled = 0;
+      items.forEach(it => {
+        if (it.manualRate || !it.productId) return;
+        it.rate = rateOf(DB.get('products', it.productId) || {}, curType);
+        filled++;
+      });
+      drawItems();
+      UI.toast(filled ? 'Tarif diisi dari Database Produk: ' + filled + ' baris' : 'Semua tarif sudah diisi manual', filled ? 'success' : 'warning');
     });
     U.$('#borongForm', m).addEventListener('submit', e => {
       e.preventDefault(); sync();
