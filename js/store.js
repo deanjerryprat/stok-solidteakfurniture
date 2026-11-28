@@ -7,6 +7,8 @@ window.DB = (function () {
   const DISABLE_KEY = 'furniture_supabase_disabled';
   const BACKUP_KEY = 'furniture_backup_config';
   const CAT_KEY = 'furniture_categories';
+  const PAYROLL_EMP_KEY = 'furniture_payroll_employees';
+  const PAYROLL_ADJ_KEY = 'furniture_payroll_adjustments';
   const TABLES = ['products', 'artisans', 'inbound', 'outbound', 'distributions', 'returns', 'qc', 'spk', 'wages', 'borong', 'boxes', 'users'];
   const JOB_TITLES = ['Manager', 'Mandor', 'Angkat Junjung', 'Pemborong Amplas', 'Pemborong Packing'];
   const WAGE_POSITIONS = {
@@ -316,6 +318,110 @@ window.DB = (function () {
       if (window.UI && typeof UI.toast === 'function') UI.toast('Gagal menyimpan kategori (penyimpanan penuh)', 'error');
     }
     return getCategories();
+  }
+
+  /* ---------- Daftar karyawan gaji & tarif tetap ---------- */
+  // Master karyawan disimpan di browser (seperti kategori). Pertama kali
+  // dibuka, daftar diisi otomatis dari catatan gaji yang sudah ada.
+  function getPayrollEmployees() {
+    const raw = localStorage.getItem(PAYROLL_EMP_KEY);
+    let list = [];
+    if (raw === null) {
+      const latest = {};
+      all('wages').forEach(w => {
+        const name = String(w.employee || '').trim();
+        if (!name) return;
+        if (!latest[name] || String(w.createdAt || '') >= String(latest[name].createdAt || '')) latest[name] = w;
+      });
+      list = Object.keys(latest).map(name => ({
+        id: name, name, position: latest[name].position || '',
+        dailyWage: U.num(latest[name].dailyWage), overtimeRate: U.num(latest[name].overtimeRate),
+        createdAt: latest[name].createdAt || new Date().toISOString()
+      }));
+      if (list.length) {
+        try { localStorage.setItem(PAYROLL_EMP_KEY, JSON.stringify(list)); } catch (e) {}
+      }
+      return list;
+    }
+    try { list = JSON.parse(raw) || []; } catch (e) { list = []; }
+    return list.filter(e => e && e.name).map(e => ({
+      id: String(e.id || e.name), name: String(e.name).trim(), position: String(e.position || ''),
+      dailyWage: U.num(e.dailyWage), overtimeRate: U.num(e.overtimeRate), createdAt: e.createdAt || ''
+    }));
+  }
+  function savePayrollEmployees(list) {
+    const clean = (list || []).filter(e => e && String(e.name || '').trim()).map(e => ({
+      id: String(e.id || e.name).trim(), name: String(e.name).trim(), position: String(e.position || ''),
+      dailyWage: U.num(e.dailyWage), overtimeRate: U.num(e.overtimeRate), createdAt: e.createdAt || new Date().toISOString()
+    }));
+    try { localStorage.setItem(PAYROLL_EMP_KEY, JSON.stringify(clean)); }
+    catch (e) {
+      if (window.UI && typeof UI.toast === 'function') UI.toast('Gagal menyimpan daftar karyawan (penyimpanan penuh)', 'error');
+    }
+    return clean;
+  }
+  function addPayrollEmployee(d) {
+    const name = String((d || {}).name || '').trim();
+    if (!name || getPayrollEmployees().some(e => e.name.toLowerCase() === name.toLowerCase())) return null;
+    const list = getPayrollEmployees();
+    const row = {
+      id: name, name, position: String(d.position || ''),
+      dailyWage: U.num(d.dailyWage), overtimeRate: U.num(d.overtimeRate), createdAt: new Date().toISOString()
+    };
+    list.push(row); savePayrollEmployees(list); return row;
+  }
+  function updatePayrollEmployee(id, d) {
+    const list = getPayrollEmployees(), i = list.findIndex(e => e.id === id);
+    if (i < 0) return null;
+    const name = String((d || {}).name || list[i].name || '').trim();
+    if (!name || list.some((e, j) => j !== i && e.name.toLowerCase() === name.toLowerCase())) return null;
+    const oldName = list[i].name;
+    list[i] = Object.assign({}, list[i], {
+      name, id: name, position: String(d.position || ''),
+      dailyWage: U.num(d.dailyWage), overtimeRate: U.num(d.overtimeRate)
+    });
+    savePayrollEmployees(list);
+    if (oldName !== name) renamePayrollAdjustments(oldName, name);
+    return list[i];
+  }
+  function deletePayrollEmployee(id) {
+    savePayrollEmployees(getPayrollEmployees().filter(e => e.id !== id));
+    return true;
+  }
+
+  /* ---------- Bonus / bon per karyawan dan per pekan ---------- */
+  function adjustmentKey(employee, week) { return String(employee || '') + '|' + String(week || ''); }
+  function getPayrollAdjustment(employee, week) {
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(PAYROLL_ADJ_KEY) || '{}') || {}; } catch (e) { map = {}; }
+    return map[adjustmentKey(employee, week)] || { bonus: 0, debt: 0, late: 0 };
+  }
+  function savePayrollAdjustment(employee, week, patch) {
+    if (!employee || !week) return;
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(PAYROLL_ADJ_KEY) || '{}') || {}; } catch (e) { map = {}; }
+    const key = adjustmentKey(employee, week);
+    map[key] = Object.assign({ bonus: 0, debt: 0, late: 0 }, map[key] || {}, patch || {});
+    try { localStorage.setItem(PAYROLL_ADJ_KEY, JSON.stringify(map)); }
+    catch (e) {
+      if (window.UI && typeof UI.toast === 'function') UI.toast('Gagal menyimpan bonus/bon karyawan (penyimpanan penuh)', 'error');
+    }
+  }
+  function renamePayrollAdjustments(oldName, newName) {
+    if (!oldName || !newName || oldName === newName) return;
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(PAYROLL_ADJ_KEY) || '{}') || {}; } catch (e) { map = {}; }
+    const prefix = oldName + '|';
+    let changed = false;
+    Object.keys(map).forEach(k => {
+      if (k.indexOf(prefix) !== 0) return;
+      const nk = newName + k.slice(prefix.length);
+      map[nk] = Object.assign({}, map[nk] || {}, map[k]);
+      delete map[k]; changed = true;
+    });
+    if (changed) {
+      try { localStorage.setItem(PAYROLL_ADJ_KEY, JSON.stringify(map)); } catch (e) {}
+    }
   }
   function addCategory(name) {
     const clean = String(name || '').trim();
@@ -940,6 +1046,8 @@ window.DB = (function () {
   return {
     KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, insertAsync, update, updateAsync, remove, removeMany, updateMany, renameArtisan,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
+    getPayrollEmployees, savePayrollEmployees, addPayrollEmployee, updatePayrollEmployee, deletePayrollEmployee,
+    getPayrollAdjustment, savePayrollAdjustment,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
     stock, totals, opsSummary, dailyWorkSummary, payrollSummary, payrollWeek, wageTotal,
