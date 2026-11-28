@@ -95,7 +95,7 @@ window.UI = (function () {
   function formModal(opts) {
     const fields = opts.fields || [];
     const html = modalHead(opts.title || 'Form') +
-      '<form id="modalForm"><div class="modal-body">' +
+      '<form id="modalForm" novalidate><div class="modal-body">' +
       (opts.notice ? '<div class="notice">' + U.esc(opts.notice) + '</div><br>' : '') +
       '<div class="form-grid">' + fields.map(f => fieldHTML(f, opts.values)).join('') + '</div>' +
       '</div><div class="modal-foot">' +
