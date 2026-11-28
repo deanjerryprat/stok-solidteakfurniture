@@ -34,7 +34,7 @@ Object.assign(window.Views, (function () {
     distSearch: '', distArtisan: '', distAdmin: '', distStatus: '', returnsTab: 'kembali', spkSearch: '',
     reportTab: 'masuk', from: U.shiftDays(-30), to: U.today(), reportProduct: '', reportCategory: '', reportArtisan: '', reportStatus: '',
     payrollQ: '', payrollFrom: U.shiftDays(-30), payrollTo: U.today(), payrollEmployee: '', payrollPosition: '',
-    slipEmployee: '', slipWeek: '',
+    slipEmployee: '', slipWeek: '', slipSelected: null,
     borongQ: '', borongFrom: U.shiftDays(-30), borongTo: U.today(), borongEmployee: '', borongAdmin: '', borongType: '', monitorDate: U.today(),
     slipBorongEmployee: '', slipBorongWeek: '', slipBorongExtra: 0,
     boxQ: ''
@@ -1125,6 +1125,72 @@ Object.assign(window.Views, (function () {
     printDocument(slipHtml(week, bonus, debt, late), 'Slip disiapkan untuk dicetak');
   }
 
+  // Slip ringkas untuk cetak kumpulan: 6 slip per halaman A4.
+  function compactSlipHtml(week, bonus, debt, late) {
+    const emp = DB.getPayrollEmployees().find(e => e.name === week.employee) || {};
+    const position = week.position || emp.position || '-';
+    const days = U.sum(week.rows, w => U.num(w.days));
+    const hours = U.sum(week.rows, w => U.num(w.overtimeHours));
+    const total = week.subtotal + bonus - debt - late;
+    const row = (label, value, bold) =>
+      '<tr' + (bold ? ' class="grand"' : '') + '><td>' + label + '</td><td>' + value + '</td></tr>';
+    const line = (label, value, bold) => row(label, U.rp(value), bold);
+    return '<div class="slip">' +
+      '<div class="head"><div><h1>SLIP GAJI MINGGUAN</h1><div class="muted">CV Furniture Jati - Sistem Stok & Produksi</div></div>' +
+      '<div class="right"><strong>' + U.esc(week.employee) + '</strong><br>' +
+      '<span class="muted">' + U.esc(position) + '</span><br>' +
+      '<span class="muted">' + U.dateID(week.start) + ' - ' + U.dateID(week.end) + '</span></div></div>' +
+      '<table><tbody>' +
+      row('Jumlah Masuk', U.fmt(days) + ' hari') +
+      line('Gaji Pokok', week.basic) +
+      row('Jam Lembur', U.fmt(hours) + ' jam') +
+      line('Upah Lembur', week.overtime) +
+      line('Bonus', bonus) +
+      line('Total Bon / Hutang', -debt) +
+      line('Potongan Telat Masuk', -late) +
+      line('GAJI BERSIH', total, true) +
+      '</tbody></table>' +
+      '<div class="sign"><div>Diterima oleh,<br><br>_______________________</div>' +
+      '<div>Dibayar oleh,<br><br>_______________________</div></div>' +
+      '<div class="foot">Dicetak: ' + U.dateTime(new Date().toISOString()) + '</div>' +
+      '</div>';
+  }
+
+  function slipsHtml(pages) {
+    const body = pages.map(page =>
+      '<section class="sheet">' + page.map(s => compactSlipHtml(s.week, s.bonus, s.debt, s.late)).join('') + '</section>'
+    ).join('');
+    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Slip Gaji Karyawan</title>' +
+      '<style>' +
+      '@page{size:A4 portrait;margin:8mm}' +
+      '*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;color:#1e293b;font-size:9px}' +
+      '.sheet{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);gap:6mm;height:281mm;page-break-after:always}' +
+      '.sheet:last-child{page-break-after:auto}' +
+      '.slip{border:1.5px solid #334155;border-radius:3px;padding:7px 8px;overflow:hidden;page-break-inside:avoid;break-inside:avoid;display:flex;flex-direction:column}' +
+      '.head{display:flex;justify-content:space-between;gap:6px;border-bottom:1.5px solid #334155;padding-bottom:5px;margin-bottom:6px}' +
+      'h1{font-size:11px;margin:0 0 2px;color:#7a4a22}.right{text-align:right;font-size:9px}' +
+      '.muted{color:#64748b;font-size:8px}table{width:100%;border-collapse:collapse;margin:0}' +
+      'th,td{border:1px solid #cbd5e1;padding:3px 5px;text-align:left}td:last-child{text-align:right}' +
+      '.grand{font-weight:bold;background:#f1f5f9}.sign{margin-top:auto;display:flex;justify-content:space-between;font-size:8px}' +
+      '.foot{font-size:7px;color:#64748b;text-align:right;margin-top:4px}' +
+      '</style></head><body>' + body +
+      '<script>window.onload=function(){window.print()}<\/script></body></html>';
+  }
+
+  function printSlips(employees) {
+    const names = (employees || []).filter(Boolean);
+    if (!names.length) { UI.toast('Pilih minimal satu karyawan untuk dicetak', 'warning'); return; }
+    const items = names.map(name => {
+      const week = DB.payrollWeek(name, state.slipWeek);
+      const adj = DB.getPayrollAdjustment(name, state.slipWeek);
+      return { week, bonus: U.num(adj.bonus), debt: U.num(adj.debt), late: U.num(adj.late) };
+    });
+    const pages = [];
+    for (let i = 0; i < items.length; i += 6) pages.push(items.slice(i, i + 6));
+    const msg = 'Cetak ' + items.length + ' slip siap (' + pages.length + ' halaman A4)';
+    printDocument(slipsHtml(pages), msg);
+  }
+
   const payroll = {
     render() {
       const allW = DB.all('wages');
@@ -1134,6 +1200,8 @@ Object.assign(window.Views, (function () {
       const empNames = U.unique(employees.map(e => e.name).concat(names)).filter(Boolean).sort(U.natCompare);
       if (!state.slipEmployee && empNames.length) state.slipEmployee = empNames[0];
       if (!state.slipWeek) state.slipWeek = weekStart(U.today());
+      if (state.slipSelected === null) state.slipSelected = empNames.slice(0, 6);
+      else state.slipSelected = state.slipSelected.filter(n => empNames.includes(n));
 
       let rows = allW.filter(w => (!state.payrollFrom || w.date >= state.payrollFrom) && (!state.payrollTo || w.date <= state.payrollTo));
       rows = filterRows(rows, state.payrollQ, ['employee', 'position', 'date', 'notes']);
@@ -1152,7 +1220,7 @@ Object.assign(window.Views, (function () {
       return UI.pageHead('Gaji Karyawan Harian', 'Daftar karyawan dengan tarif tetap; catat gaji cukup isi hari masuk dan jam lembur; bonus dan bon diatur per orang',
           (can('payroll.edit') ? '<button class="btn" data-act="addEmployee">+ Tambah Karyawan</button>' : '') +
           (can('payroll.edit') ? '<button class="btn btn-primary" data-act="addWage">+ Catat Gaji Harian</button>' : '') +
-          '<button class="btn" data-act="printSlip">Cetak Slip Mingguan</button>') +
+          '<button class="btn" data-act="printSlips">Cetak 6 Slip / Halaman</button>') +
         '<div class="grid grid-stats">' +
         UI.statCard({ label: 'Gaji Hari Ini', value: U.rp(today.total), sub: U.dateID(U.today()), icon: 'Gaji' }) +
         UI.statCard({ label: 'Karyawan Masuk Hari Ini', value: U.fmt(today.employees), sub: 'orang', icon: 'Pengrajin' }) +
@@ -1198,7 +1266,10 @@ Object.assign(window.Views, (function () {
             ...(can('payroll.edit') ? [{ label: 'Edit', act: 'editWage' }, { label: 'Hapus', act: 'delWage', cls: 'danger' }] : [])],
           empty: 'Belum ada catatan gaji harian.'
         }) + '</div></div><br>' +
-        '<div class="card"><div class="card-head"><h3>Slip Gaji Mingguan</h3><span class="badge badge-blue">' + U.dateID(week.start) + ' - ' + U.dateID(week.end) + '</span></div><div class="card-body">' +
+        '<div class="card"><div class="card-head"><h3>Slip Gaji Mingguan</h3><span style="display:flex;gap:8px">' +
+        '<button class="btn btn-sm" data-act="printSlip">Cetak Slip Ini</button>' +
+        '<button class="btn btn-sm btn-primary" data-act="printSlips">Cetak 6 Slip / Halaman</button>' +
+        '<span class="badge badge-blue">' + U.dateID(week.start) + ' - ' + U.dateID(week.end) + '</span></span></div><div class="card-body">' +
         '<div class="form-grid">' +
         '<div class="field"><label>Karyawan</label><select id="slipEmployee">' + weekOpts + '</select></div>' +
         '<div class="field"><label>Mulai Pekan (Senin)</label><input type="date" id="slipWeek" value="' + U.esc(state.slipWeek) + '"></div>' +
@@ -1208,6 +1279,18 @@ Object.assign(window.Views, (function () {
         '</div>' +
         '<div class="notice" style="margin-top:12px">Jabatan: <strong>' + U.esc(week.position || ((employees.find(e => e.name === state.slipEmployee) || {}).position) || '-') + '</strong>. ' +
         'Bonus, total bon/hutang, dan potongan telat tersimpan berbeda untuk setiap karyawan pada pekan ini.</div>' +
+        '<div style="margin-top:14px;padding:12px;border:1px solid #e2e8f0;border-radius:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<strong>Pilih Karyawan untuk Dicetak</strong><span style="display:flex;gap:8px">' +
+        '<button class="btn btn-sm" data-act="selectAllSlips">Pilih Semua</button>' +
+        '<button class="btn btn-sm" data-act="clearSlips">Kosongkan</button></span></div>' +
+        '<div class="muted" style="font-size:12px;margin:5px 0 9px">Satu halaman A4 memuat 6 slip. Jika lebih dari 6, cetak otomatis lanjut ke halaman berikutnya.</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px 16px">' +
+        (empNames.length ? empNames.map(n =>
+          '<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px">' +
+          '<input type="checkbox" class="slip-pick" value="' + U.esc(n) + '"' + (state.slipSelected.includes(n) ? ' checked' : '') + '> ' +
+          U.esc(n) + '</label>').join('') : '<span class="muted">Belum ada karyawan.</span>') +
+        '</div></div>' +
         '<div style="margin-top:14px">' + UI.table({
           columns: [
             { label: 'Tanggal', render: r => U.dateID(r.date) },
@@ -1236,6 +1319,11 @@ Object.assign(window.Views, (function () {
       U.$('#wagePosition', root).addEventListener('change', e => { state.payrollPosition = e.target.value; App.refresh(); });
       U.$('#slipEmployee', root).addEventListener('change', e => { state.slipEmployee = e.target.value; App.refresh(); });
       U.$('#slipWeek', root).addEventListener('change', e => { state.slipWeek = e.target.value; App.refresh(); });
+      U.$$('.slip-pick', root).forEach(el => el.addEventListener('change', e => {
+        const n = e.target.value;
+        if (e.target.checked) { if (!state.slipSelected.includes(n)) state.slipSelected.push(n); }
+        else state.slipSelected = state.slipSelected.filter(x => x !== n);
+      }));
 
       const week = DB.payrollWeek(state.slipEmployee, state.slipWeek);
       const recalc = () => {
@@ -1259,7 +1347,9 @@ Object.assign(window.Views, (function () {
         if (act === 'delEmployee') {
           const e = DB.getPayrollEmployees().find(x => x.id === b.dataset.id);
           if (e && can('payroll.edit')) UI.confirm('Hapus ' + e.name + ' dari Daftar Karyawan? Catatan gaji lama tetap tersimpan.', () => {
-            DB.deletePayrollEmployee(e.id); UI.toast('Karyawan dihapus dari daftar', 'success'); App.refresh();
+            DB.deletePayrollEmployee(e.id);
+            state.slipSelected = state.slipSelected.filter(n => n !== e.name);
+            UI.toast('Karyawan dihapus dari daftar', 'success'); App.refresh();
           }, true);
         }
         if (act === 'printWage') {
@@ -1272,11 +1362,24 @@ Object.assign(window.Views, (function () {
           const w = DB.get('wages', b.dataset.id);
           if (w && can('payroll.edit')) UI.confirm('Hapus catatan gaji ' + w.employee + ' tanggal ' + U.dateID(w.date) + '?', () => { DB.remove('wages', w.id); UI.toast('Dihapus', 'success'); App.refresh(); }, true);
         }
+        if (act === 'selectAllSlips') {
+          state.slipSelected = U.$$('.slip-pick', root).map(el => el.value);
+          U.$$('.slip-pick', root).forEach(el => { el.checked = true; });
+        }
+        if (act === 'clearSlips') {
+          state.slipSelected = [];
+          U.$$('.slip-pick', root).forEach(el => { el.checked = false; });
+        }
         if (act === 'printSlip') {
+          recalc();
           printSlip(week,
             U.num(U.$('#slipBonus', root)?.value),
             U.num(U.$('#slipDebt', root)?.value),
             U.num(U.$('#slipLate', root)?.value));
+        }
+        if (act === 'printSlips') {
+          recalc();
+          printSlips(U.$$('.slip-pick', root).filter(el => el.checked).map(el => el.value));
         }
         if (act === 'wageExcel' || act === 'wagePdf') {
           const rows = [['Tanggal', 'Nama Karyawan', 'Jabatan', 'Gaji Harian', 'Lembur/Jam', 'Jumlah Masuk', 'Jam Lembur', 'Gaji Pokok', 'Upah Lembur', 'Total', 'Catatan']]
