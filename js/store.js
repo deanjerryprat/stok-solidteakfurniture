@@ -499,10 +499,12 @@ window.DB = (function () {
     try {
       const { error } = await fn();
       if (error) throw error;
+      return { ok: true };
     } catch (e) {
       UI.toast('Gagal sinkron ke Supabase (' + label + '): ' + e.message, 'error');
       try { await pull(); } catch (ignore) {}
       if (window.App) App.refresh();
+      return { ok: false, error: e };
     }
   }
 
@@ -547,19 +549,39 @@ window.DB = (function () {
   /* ---------- CRUD (sinkron untuk UI, async ke Supabase) ---------- */
   const all = name => (load()[name] || []).slice();
   const get = (name, id) => load()[name].find(x => x.id === id) || null;
-  function insert(name, obj) {
+  function applyInsert(name, obj) {
     const db = load();
     const row = Object.assign({ id: obj.id || U.uid(name.slice(0, 3)), createdAt: new Date().toISOString() }, obj);
     db[name].push(row); save();
+    return row;
+  }
+  function applyUpdate(name, id, patch) {
+    const db = load(), i = db[name].findIndex(x => x.id === id);
+    if (i < 0) return null;
+    db[name][i] = Object.assign({}, db[name][i], patch); save();
+    return db[name][i];
+  }
+  function insert(name, obj) {
+    const row = applyInsert(name, obj);
     if (isSupabase()) queue(() => sb.from(name).insert(row), 'tambah ' + name);
     return row;
   }
   function update(name, id, patch) {
-    const db = load(), i = db[name].findIndex(x => x.id === id);
-    if (i < 0) return null;
-    db[name][i] = Object.assign({}, db[name][i], patch); save();
-    if (isSupabase()) queue(() => sb.from(name).update(patch).eq('id', id), 'update ' + name);
-    return db[name][i];
+    const row = applyUpdate(name, id, patch);
+    if (row && isSupabase()) queue(() => sb.from(name).update(patch).eq('id', id), 'update ' + name);
+    return row;
+  }
+  // Versi await: dipakai form yang harus memastikan data tersimpan sebelum tutorial sukses.
+  async function insertAsync(name, obj) {
+    const row = applyInsert(name, obj);
+    const res = isSupabase() ? await queue(() => sb.from(name).insert(row), 'tambah ' + name) : { ok: true };
+    return Object.assign({ row }, res);
+  }
+  async function updateAsync(name, id, patch) {
+    const row = applyUpdate(name, id, patch);
+    if (!row) return { ok: false, row: null, error: new Error('Data tidak ditemukan') };
+    const res = isSupabase() ? await queue(() => sb.from(name).update(patch).eq('id', id), 'update ' + name) : { ok: true };
+    return Object.assign({ row }, res);
   }
   function remove(name, id) {
     const db = load();
@@ -891,7 +913,7 @@ window.DB = (function () {
   }
 
   return {
-    KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, update, remove, removeMany, updateMany, renameArtisan,
+    KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, insertAsync, update, updateAsync, remove, removeMany, updateMany, renameArtisan,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getConfig, saveConfig, getBackupConfig, saveBackupConfig, pushBackup, connectSupabase, useLocal, isSupabase, isConfigured, autoConnectEnabled, pull, syncNow,
     qtyIn, qtyOut, qtyOutNet, qtyDist, qtyReturn, qtyReturnSource, qtyAfkirArtisan, qtyQc, qtyQcPassed, qtyQcPassedAll, qtyQcRejected,
