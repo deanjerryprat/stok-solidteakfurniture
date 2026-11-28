@@ -1,7 +1,7 @@
 /* views.js - Dashboard, Produk, Barang Masuk, Barang Keluar, Pengrajin */
 window.Views = (function () {
   const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' - ' + p.name }));
-  const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
+  const aOpts = () => DB.sortArtisansById(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pName = id => (DB.get('products', id) || {}).name || '-';
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
   const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
@@ -633,9 +633,9 @@ window.Views = (function () {
   window.artisanForm = function (existing) {
     UI.formModal({
       title: existing ? 'Edit Pengrajin' : 'Tambah Pengrajin', wide: true,
-      values: existing ? Object.assign({}, existing, { idManual: existing.id, productTypes: (existing.productTypes || []).join(', ') }) : { active: true },
+      values: existing ? Object.assign({}, existing, { idManual: existing.id, productTypes: (existing.productTypes || []).join(', ') }) : { active: true, idManual: DB.nextArtisanId() },
       fields: [
-        { key: 'idManual', label: 'ID Pengrajin', type: 'text', required: true, placeholder: 'Mis. PN011', hint: 'Isi ID sendiri. ID boleh diubah; riwayat terkait ikut diperbarui.' },
+        { key: 'idManual', label: 'ID Pengrajin', type: 'text', required: true, placeholder: 'Mis. PN025', hint: 'ID berikutnya terisi otomatis saat menambah pengrajin. Boleh diubah; riwayat terkait ikut diperbarui.' },
         { key: 'name', label: 'Nama Pengrajin', required: true },
         { key: 'address', label: 'Alamat', full: true },
         { key: 'phone', label: 'Nomor Telepon' },
@@ -668,7 +668,7 @@ window.Views = (function () {
 
   const artisans = {
     render() {
-      let rows = U.sortByName(DB.all('artisans'));
+      let rows = DB.sortArtisansById(DB.all('artisans'));
       rows = filterRows(rows, state.artisanSearch, ['id', 'name', 'address', 'phone', 'specialization']);
       if (state.artisanActive === 'aktif') rows = rows.filter(a => a.active);
       if (state.artisanActive === 'nonaktif') rows = rows.filter(a => !a.active);

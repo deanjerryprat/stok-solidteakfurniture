@@ -1,7 +1,7 @@
 /* views2.js - Distribusi, Barang Kembali/QC, SPK, Laporan, Pencarian, Notifikasi, User */
 Object.assign(window.Views, (function () {
   const pOpts = () => U.sortBySKU(DB.all('products')).map(p => ({ value: p.id, label: p.sku + ' - ' + p.name }));
-  const aOpts = () => U.sortByName(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
+  const aOpts = () => DB.sortArtisansById(DB.all('artisans')).map(a => ({ value: a.id, label: a.name }));
   const pOf = id => DB.get('products', id) || {};
   const aName = id => (DB.get('artisans', id) || {}).name || '-';
   const adminOpts = () => DB.all('users').filter(u => u.active).map(u => ({ value: u.id, label: (u.name || u.username) + ' - ' + u.role }))
@@ -641,7 +641,7 @@ Object.assign(window.Views, (function () {
         .filter(p => !state.reportStatus || p.status === state.reportStatus)
         .map(p => { const s = DB.stock(p.id); return [p.sku, p.name, p.category, p.status, s.warehouse, s.process, s.qc, s.ready, s.damaged, s.total]; });
     }
-    return U.sortByName(DB.all('artisans')).filter(a => !state.reportArtisan || a.id === state.reportArtisan).map(a => {
+    return DB.sortArtisansById(DB.all('artisans')).filter(a => !state.reportArtisan || a.id === state.reportArtisan).map(a => {
       const s = DB.artisanStats(a.id);
       return [a.id, a.name, a.specialization, s.received, s.finished, s.unfinished, s.afkir, s.lateCount];
     });
@@ -694,7 +694,7 @@ Object.assign(window.Views, (function () {
       const match = obj => Object.values(obj).some(v => typeof v !== 'object' && String(v || '').toLowerCase().includes(s));
       const groups = [
         ['Produk', U.sortBySKU(DB.all('products')).filter(match), '#/products', p => p.name + '  |  ' + p.sku],
-        ['Pengrajin', U.sortByName(DB.all('artisans')).filter(match), '#/artisans', a => a.name + '  |  ' + a.id],
+        ['Pengrajin', DB.sortArtisansById(DB.all('artisans')).filter(match), '#/artisans', a => a.name + '  |  ' + a.id],
         ['Barang Masuk', DB.all('inbound').filter(match), '#/inbound', x => x.productName + '  |  ' + x.qty + ' pcs'],
         ['Barang Keluar', DB.all('outbound').filter(match), '#/outbound', x => x.productName + '  |  ' + x.qty + ' pcs'],
         ['Distribusi', DB.all('distributions').filter(match), '#/distributions', x => x.artisanName + '  |  ' + x.productName],

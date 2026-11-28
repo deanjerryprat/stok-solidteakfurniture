@@ -769,6 +769,33 @@ window.DB = (function () {
     return true;
   }
 
+  // Urutkan pengrajin berdasarkan ID (PN001, PN002, ...), bukan nama.
+  function sortArtisansById(list) {
+    return (list || []).slice().sort((a, b) => U.natCompare(String(a.id || ''), String(b.id || '')));
+  }
+  // ID berikutnya diambil dari angka terbesar yang sudah dipakai, lalu dicek lagi
+  // supaya tidak bentrok bila ada ID kosong di tengah.
+  function nextArtisanId() {
+    let best = null;
+    all('artisans').forEach(a => {
+      const id = String(a.id || '').trim();
+      const m = id.match(/^(.*?)(\d+)$/);
+      if (!m) return;
+      const num = Number(m[2]);
+      if (!isFinite(num)) return;
+      if (!best || num > best.num) best = { prefix: m[1] || 'PN', num, width: m[2].length };
+    });
+    if (!best) return 'PN001';
+    const used = new Set(all('artisans').map(a => String(a.id || '').trim().toUpperCase()));
+    let n = best.num + 1;
+    let id = best.prefix + String(n).padStart(best.width, '0');
+    while (used.has(id.toUpperCase())) {
+      n++;
+      id = best.prefix + String(n).padStart(best.width, '0');
+    }
+    return id;
+  }
+
   /* ---------- Perhitungan stok otomatis ---------- */
   const sumWhere = (arr, pred, field) => U.sum(arr.filter(pred), x => x[field]);
 
@@ -1050,6 +1077,7 @@ window.DB = (function () {
 
   return {
     KEY, TABLES, JOB_TITLES, load, save, reset, replace, all, get, insert, insertAsync, update, updateAsync, remove, removeMany, updateMany, renameArtisan,
+    sortArtisansById, nextArtisanId,
     getCategories, saveCategories, addCategory, renameCategory, deleteCategory,
     getPayrollEmployees, savePayrollEmployees, addPayrollEmployee, updatePayrollEmployee, deletePayrollEmployee,
     getPayrollAdjustment, savePayrollAdjustment,
