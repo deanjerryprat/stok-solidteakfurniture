@@ -20,7 +20,8 @@ window.App = (function () {
     ]},
     { group: 'Keuangan', items: [
       { key: 'payroll', label: 'Gaji Karyawan', icon: 'Gaji', perm: 'payroll.view' },
-      { key: 'borong', label: 'Tugas & Gaji Borong', icon: 'Borong', perm: 'borong.view' }
+      { key: 'borong', label: 'Tugas & Gaji Borong', icon: 'Borong', perm: 'borong.view' },
+      { key: 'wageHistory', label: 'Riwayat Gaji', icon: 'Gaji', perm: 'payroll.view' }
     ]},
     { group: 'Laporan & Sistem', items: [
       { key: 'import', label: 'Import Excel', icon: '', perm: 'import.view' },
