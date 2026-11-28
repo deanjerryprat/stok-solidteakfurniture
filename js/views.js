@@ -209,8 +209,8 @@ window.Views = (function () {
         data.category = String(data.category || '').trim();
         // Foto yang tidak diubah tidak perlu dikirim ulang (bisa beberapa MB).
         if (existing && data.photo === existing.photo) delete data.photo;
-        if (existing) { DB.update('products', existing.id, data); UI.toast('Produk diperbarui', 'success'); }
-        else { DB.insert('products', data); UI.toast('Produk ditambahkan', 'success'); }
+        if (existing) { DB.update('products', existing.id, data); UI.toast('Edit produk berhasil', 'success'); }
+        else { DB.insert('products', data); UI.toast('Produk berhasil ditambahkan', 'success'); }
         closeFn(); App.refresh();
       }
     });
