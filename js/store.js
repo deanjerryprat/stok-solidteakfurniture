@@ -37,6 +37,7 @@ window.DB = (function () {
   let cache = null;
   let mode = localStorage.getItem(MODE_KEY) || 'local';
   let sb = null;
+  let slimCacheWarned = false;
 
   function svgPhoto(label, color) {
     const bg = color || '#f1f5f9';
@@ -270,7 +271,28 @@ window.DB = (function () {
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(cache)); }
-    catch (e) { U.toast('Gagal menyimpan cache lokal (penyimpanan penuh)', 'error'); }
+    catch (e) {
+      // Foto produk bisa membuat cache melebihi kuota localStorage (±5 MB).
+      // Simpan semua data teks; foto besar dibuang hanya dari cache lokal.
+      // Data foto tetap aman di Supabase dan akan tertarik lagi saat online.
+      let savedSlim = false;
+      try {
+        const slim = JSON.parse(JSON.stringify(cache));
+        (slim.products || []).forEach(p => {
+          if (typeof p.photo === 'string' && p.photo.length > 1000) delete p.photo;
+        });
+        localStorage.setItem(KEY, JSON.stringify(slim));
+        savedSlim = true;
+      } catch (e2) { /* benar-benar penuh, tetap lanjut ke Supabase */ }
+      if (window.UI && typeof UI.toast === 'function') {
+        if (savedSlim && !slimCacheWarned) {
+          UI.toast('Penyimpanan browser penuh. Foto tetap tersimpan di Supabase, tetapi tidak disimpan di cache lokal.', 'warning');
+          slimCacheWarned = true;
+        } else if (!savedSlim) {
+          UI.toast('Gagal menyimpan data ke browser (penyimpanan penuh)', 'error');
+        }
+      }
+    }
     scheduleBackup();
   }
 
@@ -289,7 +311,10 @@ window.DB = (function () {
   }
   function saveCategories(list) {
     const clean = Array.from(new Set((list || []).map(c => String(c).trim()).filter(Boolean)));
-    try { localStorage.setItem(CAT_KEY, JSON.stringify(clean)); } catch (e) { U.toast('Gagal menyimpan kategori (penyimpanan penuh)', 'error'); }
+    try { localStorage.setItem(CAT_KEY, JSON.stringify(clean)); }
+    catch (e) {
+      if (window.UI && typeof UI.toast === 'function') UI.toast('Gagal menyimpan kategori (penyimpanan penuh)', 'error');
+    }
     return getCategories();
   }
   function addCategory(name) {
