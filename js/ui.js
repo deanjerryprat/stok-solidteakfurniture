@@ -98,6 +98,7 @@ window.UI = (function () {
       '<form id="modalForm" novalidate><div class="modal-body">' +
       (opts.notice ? '<div class="notice">' + U.esc(opts.notice) + '</div><br>' : '') +
       '<div class="form-grid">' + fields.map(f => fieldHTML(f, opts.values)).join('') + '</div>' +
+      (opts.extraHtml || '') +
       '</div><div class="modal-foot">' +
       '<button type="button" class="btn" data-close>Batal</button>' +
       '<button type="submit" class="btn btn-primary">' + U.esc(opts.submitLabel || 'Simpan') + '</button>' +

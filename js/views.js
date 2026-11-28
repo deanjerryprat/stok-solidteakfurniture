@@ -427,43 +427,114 @@ window.Views = (function () {
 
   /* ================= BARANG MASUK ================= */
   function inboundForm(existing) {
+    const multi = !existing;
     const linked = existing ? inboundArtisan(existing) : null;
     const values = existing
       ? Object.assign({}, existing, { artisanId: linked ? linked.id : '' })
       : { date: U.today(), artisanId: '' };
+    const headFields = [
+      { key: 'date', label: 'Tanggal Masuk', type: 'date', required: true },
+      { key: 'artisanId', label: 'Pengrajin (Daftar Pengrajin)', type: 'select', options: aOpts(), placeholder: '-- Pilih pengrajin --', full: true },
+      { key: 'supplier', label: 'Supplier / Sumber Barang', required: true, placeholder: 'CV Jati Utama' }
+    ];
+    const itemFields = [
+      { key: 'productId', label: 'Produk', type: 'select', options: pOpts(), required: true, placeholder: '-- Pilih produk --', full: true },
+      { key: 'qty', label: 'Jumlah Masuk (pcs)', type: 'number', min: 1, required: true },
+      { key: 'condition', label: 'Kondisi Barang', type: 'select', options: ['Baik', 'Rusak Ringan', 'Rusak'], required: true, value: 'Baik' }
+    ];
+    const tailFields = [
+      { key: 'receiver', label: 'Petugas Penerima', required: true, placeholder: 'Budi' },
+      { key: 'notes', label: 'Keterangan', type: 'textarea', full: true }
+    ];
+    const productOptions = pOpts().map(o => '<option value="' + U.esc(o.value) + '">' + U.esc(o.label) + '</option>').join('');
+    const conditionOptions = ['Baik', 'Rusak Ringan', 'Rusak'].map(c => '<option value="' + c + '">' + c + '</option>').join('');
+    const rowHtml = () =>
+      '<div class="mi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #f1f5f9">' +
+        '<div class="field"><label>Produk</label><select class="mi-product"><option value="">-- Pilih produk --</option>' + productOptions + '</select></div>' +
+        '<div class="field"><label>Jumlah (pcs)</label><input type="number" class="mi-qty" min="1" value="1"></div>' +
+        '<div class="field"><label>Kondisi</label><select class="mi-condition">' + conditionOptions + '</select></div>' +
+        '<button type="button" class="btn btn-sm btn-danger mi-remove">Hapus</button>' +
+      '</div>';
+    const extraHtml = multi
+      ? '<div class="section-title" style="margin-top:18px">Daftar Barang Masuk</div>' +
+        '<div class="hint">Isi tanggal, sumber, dan petugas sekali. Tambah baris untuk setiap produk yang berbeda.</div>' +
+        '<div id="multiItems">' + rowHtml() + '</div>' +
+        '<div style="display:flex;gap:10px;align-items:center;margin-top:10px">' +
+          '<button type="button" class="btn btn-sm" id="addItemRow">+ Tambah Barang</button>' +
+          '<strong id="multiTotal">Total: 0 pcs</strong>' +
+        '</div>'
+      : '';
     UI.formModal({
       title: existing ? 'Edit Barang Masuk' : 'Catat Barang Masuk', wide: true,
       values,
-      notice: 'Pilih pengrajin dari Daftar Pengrajin bila barang berasal dari pengrajin. Nama pengrajin akan otomatis diisi ke kolom sumber. Supplier di luar daftar tetap bisa diketik manual.',
-      fields: [
-        { key: 'date', label: 'Tanggal Masuk', type: 'date', required: true },
-        { key: 'artisanId', label: 'Pengrajin (Daftar Pengrajin)', type: 'select', options: aOpts(), placeholder: '-- Pilih pengrajin --', full: true },
-        { key: 'supplier', label: 'Supplier / Sumber Barang', required: true, placeholder: 'CV Jati Utama' },
-        { key: 'productId', label: 'Produk', type: 'select', options: pOpts(), required: true, placeholder: '-- Pilih produk --', full: true },
-        { key: 'qty', label: 'Jumlah Masuk (pcs)', type: 'number', min: 1, required: true },
-        { key: 'condition', label: 'Kondisi Barang', type: 'select', options: ['Baik', 'Rusak Ringan', 'Rusak'], required: true, value: 'Baik' },
-        { key: 'receiver', label: 'Petugas Penerima', required: true, placeholder: 'Budi' },
-        { key: 'notes', label: 'Keterangan', type: 'textarea', full: true }
-      ],
+      submitLabel: multi ? 'Simpan Semua' : 'Simpan',
+      notice: multi
+        ? 'Bisa mencatat beberapa produk berbeda dalam satu pengisian. Pilih pengrajin dari Daftar Pengrajin bila barang berasal dari pengrajin; nama pengrajin otomatis mengisi kolom sumber. Supplier di luar daftar tetap bisa diketik manual.'
+        : 'Pilih pengrajin dari Daftar Pengrajin bila barang berasal dari pengrajin. Nama pengrajin akan otomatis diisi ke kolom sumber. Supplier di luar daftar tetap bisa diketik manual.',
+      fields: multi ? headFields.concat(tailFields) : headFields.concat(itemFields, tailFields),
+      extraHtml,
       onOpen() {
         const sel = U.$('#f_artisanId');
-        if (!sel) return;
-        sel.addEventListener('change', () => {
+        if (sel) sel.addEventListener('change', () => {
           const a = DB.get('artisans', sel.value);
           const input = U.$('#f_supplier');
           if (a && input) input.value = a.name;
         });
+        if (!multi) return;
+        const wrap = U.$('#multiItems');
+        const total = U.$('#multiTotal');
+        const refresh = () => {
+          let sum = 0;
+          U.$$('.mi-qty', wrap).forEach(i => { sum += U.num(i.value); });
+          if (total) total.textContent = 'Total: ' + U.fmt(sum) + ' pcs';
+          const count = U.$$('.mi-row', wrap).length;
+          U.$$('.mi-remove', wrap).forEach(b => { b.disabled = count <= 1; });
+        };
+        U.$('#addItemRow').addEventListener('click', () => { wrap.insertAdjacentHTML('beforeend', rowHtml()); refresh(); });
+        wrap.addEventListener('click', e => {
+          if (!e.target.classList.contains('mi-remove')) return;
+          const row = e.target.closest('.mi-row');
+          if (row && U.$$('.mi-row', wrap).length > 1) { row.remove(); refresh(); }
+        });
+        wrap.addEventListener('input', refresh);
+        refresh();
       },
       onSubmit(data, close) {
-        if (U.num(data.qty) <= 0) { UI.toast('Jumlah harus > 0', 'error'); return; }
-        const p = pOf(data.productId);
         const a = data.artisanId ? DB.get('artisans', data.artisanId) : null;
         data.artisanId = a ? a.id : '';
         if (a) data.supplier = a.name;
         if (!String(data.supplier || '').trim()) { UI.toast('Supplier / sumber barang wajib diisi', 'warning'); return; }
-        data.sku = p.sku; data.productName = p.name; data.qty = U.num(data.qty);
-        if (existing) DB.update('inbound', existing.id, data); else DB.insert('inbound', data);
-        UI.toast('Barang masuk tercatat. Stok gudang bertambah ' + U.fmt(data.qty), 'success');
+        if (!multi) {
+          if (U.num(data.qty) <= 0) { UI.toast('Jumlah harus > 0', 'error'); return; }
+          const p = pOf(data.productId);
+          data.sku = p.sku; data.productName = p.name; data.qty = U.num(data.qty);
+          DB.update('inbound', existing.id, data);
+          UI.toast('Barang masuk diubah. Stok gudang disesuaikan otomatis', 'success');
+          close(); App.refresh();
+          return;
+        }
+        const wrap = U.$('#multiItems');
+        const rows = U.$$('.mi-row', wrap).map(el => ({
+          productId: U.$('.mi-product', el).value,
+          qty: U.num(U.$('.mi-qty', el).value),
+          condition: U.$('.mi-condition', el).value || 'Baik'
+        }));
+        if (!rows.length) { UI.toast('Tambah minimal satu barang', 'warning'); return; }
+        for (let i = 0; i < rows.length; i++) {
+          if (!rows[i].productId) { UI.toast('Produk baris ' + (i + 1) + ' belum dipilih', 'warning'); return; }
+          if (rows[i].qty <= 0) { UI.toast('Jumlah baris ' + (i + 1) + ' harus lebih dari 0', 'warning'); return; }
+        }
+        const base = Object.assign({}, data);
+        let totalQty = 0;
+        rows.forEach(r => {
+          const p = pOf(r.productId);
+          totalQty += r.qty;
+          DB.insert('inbound', Object.assign({}, base, {
+            productId: r.productId, sku: p.sku, productName: p.name,
+            qty: r.qty, condition: r.condition
+          }));
+        });
+        UI.toast(U.fmt(rows.length) + ' barang masuk tercatat. Stok gudang bertambah ' + U.fmt(totalQty) + ' pcs', 'success');
         close(); App.refresh();
       }
     });
