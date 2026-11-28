@@ -199,7 +199,7 @@ window.Views = (function () {
         { key: 'notes', label: 'Catatan', type: 'textarea', full: true, placeholder: 'Opsional' }
       ],
       onSubmit(data, closeFn) {
-        if (DB.all('products').some(p => p.sku.toLowerCase() === data.sku.toLowerCase() && p.id !== (existing || {}).id)) {
+        if (DB.all('products').some(p => String(p.sku || '').toLowerCase() === String(data.sku || '').toLowerCase() && p.id !== (existing || {}).id)) {
           UI.toast('SKU sudah digunakan', 'error'); return;
         }
         data.minStock = U.num(data.minStock);
@@ -209,9 +209,34 @@ window.Views = (function () {
         data.category = String(data.category || '').trim();
         // Foto yang tidak diubah tidak perlu dikirim ulang (bisa beberapa MB).
         if (existing && data.photo === existing.photo) delete data.photo;
-        if (existing) { DB.update('products', existing.id, data); UI.toast('Edit produk berhasil', 'success'); }
-        else { DB.insert('products', data); UI.toast('Produk berhasil ditambahkan', 'success'); }
-        closeFn(); App.refresh();
+
+        const btn = U.$('#modalForm button[type="submit"]');
+        const label = btn ? btn.textContent : 'Simpan';
+        const busy = on => {
+          if (btn && btn.isConnected) { btn.disabled = on; btn.textContent = on ? 'Menyimpan...' : label; }
+        };
+        const fail = (action, res) => {
+          const msg = res && res.error && res.error.message ? res.error.message : 'tidak diketahui';
+          UI.toast(action + ' gagal: ' + msg, 'error');
+          busy(false);
+        };
+        busy(true);
+        (async () => {
+          try {
+            if (existing) {
+              const res = await DB.updateAsync('products', existing.id, data);
+              if (!res.ok) return fail('Edit produk', res);
+              UI.toast('Edit produk berhasil', 'success');
+            } else {
+              const res = await DB.insertAsync('products', data);
+              if (!res.ok) return fail('Tambah produk', res);
+              UI.toast('Produk berhasil ditambahkan', 'success');
+            }
+            closeFn(); App.refresh();
+          } catch (err) {
+            fail(existing ? 'Edit produk' : 'Tambah produk', { error: err });
+          }
+        })();
       }
     });
   }
